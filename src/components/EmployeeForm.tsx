@@ -57,7 +57,7 @@ export function EmployeeForm({ action, employee }: Props) {
       </div>
 
       {isNew && (
-        <div className="rounded-lg border border-dashed border-line bg-stone-50/60 p-4">
+        <div className="rounded-lg border border-dashed border-line bg-zinc-50/60 p-4">
           <Field
             label="Temporary password"
             name="password"

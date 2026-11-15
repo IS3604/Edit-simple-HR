@@ -32,7 +32,7 @@ src/app/(app)/         dashboard, leave, requests, employees, balances, grants, 
 src/app/login/         sign-in
 src/components/        shared UI (balance cards, tables, forms)
 src/lib/               Supabase clients, auth guard, types, validation
-supabase/migrations/   0001 → 0006 (schema, RLS, balance engine, requests, cron)
+supabase/migrations/   0001 → 0008 (schema, RLS, balance engine, requests, cron)
 supabase/setup_all.sql all migrations in one file for a new project
 tests/                 database tests (PGlite) — RLS, constraints, balance engine
 scripts/               create-superadmin
@@ -53,7 +53,8 @@ Database setup: see [`docs/DEPLOY.md`](docs/DEPLOY.md) step 1.
 
 ```bash
 npm run typecheck
-npm run test:db     # 40 checks: RLS, role guards, constraints, idempotent accrual, approvals, grants
+npm run test:db         # 40 checks on PGlite: RLS, role guards, constraints, accrual, approvals, grants
+PGHOST=/tmp PGUSER=postgres npm run test:scenarios   # full-year AI-employee simulation on real Postgres (see docs/TEST-REPORT.md)
 npm run build
 ```
 

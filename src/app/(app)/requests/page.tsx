@@ -71,7 +71,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
         <div className="inline-flex rounded-lg border border-line bg-white p-0.5 shadow-xs" aria-label="Type">
           {KINDS.map((k) => (
             <Link key={k.value} href={href(status, k.value)}
-              className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${kind === k.value ? 'bg-stone-100 font-medium text-ink' : 'text-ink-500 hover:text-ink'}`}>
+              className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${kind === k.value ? 'bg-zinc-100 font-medium text-ink' : 'text-ink-500 hover:text-ink'}`}>
               {k.label}
             </Link>
           ))}

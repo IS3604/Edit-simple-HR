@@ -5,6 +5,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { PasswordChangeForm } from './PasswordChangeForm';
+import { NotificationSettings } from './NotificationSettings';
 
 export const metadata = { title: 'My account' };
 
@@ -32,6 +33,10 @@ export default async function AccountPage() {
         <Card className="overflow-hidden">
           <CardHeader title="Change password" description="At least 10 characters" />
           <div className="p-5"><PasswordChangeForm /></div>
+        </Card>
+        <Card className="overflow-hidden md:col-span-2">
+          <CardHeader title="Notifications" description="Browser push notifications for this device" />
+          <div className="p-5"><NotificationSettings superadmin={me.role === 'superadmin'} /></div>
         </Card>
       </div>
     </>

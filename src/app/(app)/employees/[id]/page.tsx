@@ -61,7 +61,7 @@ export default async function EmployeePage({
       <div className="mb-6 flex flex-wrap items-center gap-4">
         <Avatar name={employee.full_name} size="lg" />
         <div className="min-w-0">
-          <h1 className="text-[22px] font-semibold tracking-tight">{employee.full_name}</h1>
+          <h1 className="text-xl font-semibold ">{employee.full_name}</h1>
           <p className="mt-0.5 text-sm text-ink-500">
             <span className="font-mono text-xs">{employee.employee_code}</span> · {employee.email}
             {employee.designation && <> · {employee.designation}</>}
@@ -75,7 +75,7 @@ export default async function EmployeePage({
       </div>
 
       {sp.created && (
-        <div role="status" className="mb-6 flex items-center gap-2.5 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <div role="status" className="mb-6 flex items-center gap-2.5 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
           <CheckCircle2 className="h-4 w-4 shrink-0" />
           Employee added{sp.linked ? ' and linked to their existing login' : ' with a sign-in'}. {isSuper && 'Next: set their monthly allocation.'}
         </div>

@@ -9,7 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { PersonCell } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
+import { Table, TableScroll, Td, Th } from '@/components/ui/Table';
+import { RowLink } from '@/components/ui/RowLink';
 import { buttonClass } from '@/components/ui/Button';
 import { FilterBar } from '@/components/FilterBar';
 
@@ -71,7 +72,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
               </thead>
               <tbody>
                 {employees.map((e) => (
-                  <Tr key={e.id}>
+                  <RowLink key={e.id} href={`/employees/${e.id}`}>
                     <Td><PersonCell name={e.full_name} sub={e.email} href={`/employees/${e.id}`} /></Td>
                     <Td><span className="font-mono text-xs text-ink-600">{e.employee_code}</span></Td>
                     <Td>
@@ -81,7 +82,7 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
                     <Td><Badge tone={catTone[e.category]}>{CATEGORY_LABEL[e.category]}</Badge></Td>
                     <Td className="whitespace-nowrap text-ink-600">{formatDate(e.joining_date)}</Td>
                     <Td><Badge tone={e.status === 'active' ? 'success' : 'muted'} dot>{e.status === 'active' ? 'Active' : 'Inactive'}</Badge></Td>
-                  </Tr>
+                  </RowLink>
                 ))}
               </tbody>
             </Table>

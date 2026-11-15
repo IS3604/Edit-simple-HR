@@ -5,7 +5,7 @@
 1. Create a project at supabase.com (region: Mumbai `ap-south-1` is closest).
 2. **SQL Editor → New query** → paste all of `supabase/setup_all.sql` → **Run**.
    - Already ran some migrations earlier? Run only the missing files from `supabase/migrations/` in order
-     (e.g. `0004_requests_grants_overview.sql`, `0005_cron.sql`, `0006_auto_approve_halfday_cancel.sql`).
+     (e.g. `0004_requests_grants_overview.sql`, `0005_cron.sql`, `0006_auto_approve_halfday_cancel.sql`, `0007_scenario_fixes.sql`, `0008_push_subscriptions.sql`).
    - If `0005` fails with a pg_cron error: **Database → Extensions → enable `pg_cron`**, then run `0005_cron.sql` again.
 3. **Authentication → Sign In / Providers → Email**: keep Email enabled, turn **off "Allow new users to sign up"**. HR creates every account.
 4. **Authentication → URL Configuration → Site URL**: set to your production URL (after step 3 below).
@@ -52,6 +52,17 @@ git push -u origin main
 2. **API Keys** → create a key → put it in Vercel as `RESEND_API_KEY`, plus `EMAIL_FROM` and `APP_URL`. Redeploy.
 
 Emails sent: auto-approved leave (employee + HR FYI), extra-day request (Superadmins), approved / rejected (employee), cancellation (employee + HR). Without these variables the app works normally and simply doesn't email.
+
+## Push notifications (recommended)
+
+1. On your computer: `npx web-push generate-vapid-keys`
+2. Vercel → Environment Variables:
+   - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` = Public Key
+   - `VAPID_PRIVATE_KEY` = Private Key (server only)
+   - `VAPID_SUBJECT` = `mailto:hr@editsimple.in`
+3. Redeploy. Superadmins: Dashboard → **Turn on** (or My account → Notifications → Send test).
+
+Superadmins are notified of every extra-day request; employees are notified when theirs is decided. While the portal is open, the custom EditSimple chime plays; when it's closed, the device's normal notification sound is used (browsers don't allow custom sounds for background notifications). iPhone: add the portal to the Home Screen first (iOS 16.4+).
 
 ## 4. First login
 

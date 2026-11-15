@@ -13,9 +13,11 @@ import { applyLeave } from './actions';
 type Option = { value: LeaveType; label: string; available: number };
 type Duration = 'full' | 'first' | 'second';
 
+export type ApplyContext = { options: Option[]; weekendDays: number[]; holidays: string[]; today: string };
+
 export function ApplyForm({
-  options, weekendDays, holidays, today,
-}: { options: Option[]; weekendDays: number[]; holidays: string[]; today: string }) {
+  options, weekendDays, holidays, today, onDone,
+}: ApplyContext & { onDone?: () => void }) {
   const [state, action, pending] = useActionState(applyLeave, undefined);
   useActionToast(state);
   const [type, setType] = useState<LeaveType>(options[0]?.value ?? 'casual');
@@ -27,8 +29,8 @@ export function ApplyForm({
   const holidaySet = useMemo(() => new Set(holidays), [holidays]);
 
   useEffect(() => {
-    if (state?.success) { formRef.current?.reset(); setStart(''); setEnd(''); setDuration('full'); setReason(''); }
-  }, [state]);
+    if (state?.success) { formRef.current?.reset(); setStart(''); setEnd(''); setDuration('full'); setReason(''); onDone?.(); }
+  }, [state, onDone]);
 
   const singleDay = !!start && (!end || end === start);
   const half = singleDay && duration !== 'full';
@@ -81,7 +83,7 @@ export function ApplyForm({
       {singleDay && (
         <fieldset>
           <legend className="label">Duration</legend>
-          <div className="inline-flex rounded-lg border border-line bg-stone-50 p-0.5">
+          <div className="inline-flex rounded-lg border border-line bg-zinc-50 p-0.5">
             {([['full', 'Full day'], ['first', 'First half'], ['second', 'Second half']] as [Duration, string][]).map(([v, l]) => (
               <label key={v} className={`cursor-pointer rounded-md px-3 py-1.5 text-[13px] transition-colors ${duration === v ? 'bg-white font-medium text-ink shadow-xs ring-1 ring-line' : 'text-ink-500 hover:text-ink'}`}>
                 <input type="radio" name="duration" value={v} checked={duration === v} onChange={() => setDuration(v)} className="sr-only" />
@@ -103,7 +105,7 @@ export function ApplyForm({
 
       {/* Live summary */}
       {!start ? (
-        <div className="rounded-lg bg-stone-50 px-3.5 py-3 text-[13px] text-ink-500">Pick dates to see how many working days this uses.</div>
+        <div className="rounded-lg bg-zinc-50 px-3.5 py-3 text-[13px] text-ink-500">Pick dates to see how many working days this uses.</div>
       ) : count === 0 ? (
         <div className="flex gap-2.5 rounded-lg bg-red-50 px-3.5 py-3 text-[13px] text-red-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> No working days in this range (weekends / holidays).

@@ -14,7 +14,7 @@ type Entry = { employee_id: string; full_name: string; leave_type: LeaveType; st
 const chip: Record<LeaveType, string> = {
   casual: 'bg-brand-50 text-brand-700 ring-brand-100',
   earned: 'bg-sky-50 text-sky-700 ring-sky-100',
-  wfh: 'bg-stone-100 text-ink-600 ring-stone-200',
+  wfh: 'bg-zinc-100 text-ink-600 ring-zinc-200',
 };
 const short: Record<LeaveType, string> = { casual: 'CL', earned: 'EL', wfh: 'WFH' };
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -78,7 +78,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
         <div className="overflow-x-auto">
           <div className="grid min-w-[760px] grid-cols-7">
             {WEEKDAYS.map((w) => (
-              <div key={w} className="border-b border-line bg-stone-50/80 px-3 py-2 text-2xs font-medium uppercase tracking-wider text-ink-500">{w}</div>
+              <div key={w} className="border-b border-line bg-zinc-50/80 px-3 py-2 text-xs font-medium text-ink-500">{w}</div>
             ))}
             {days.map((d) => {
               const key = iso(d);
@@ -89,7 +89,7 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
               const items = list.filter((e) => e.start_date <= key && e.end_date >= key);
               return (
                 <div key={key} className={`min-h-[112px] border-b border-r border-line p-2 [&:nth-child(7n)]:border-r-0 ${
-                  !inMonth ? 'bg-stone-50/50' : holiday ? 'bg-amber-50/60' : isWeekend ? 'bg-stone-50/70' : 'bg-white'}`}>
+                  !inMonth ? 'bg-zinc-50/50' : holiday ? 'bg-amber-50/60' : isWeekend ? 'bg-zinc-50/70' : 'bg-white'}`}>
                   <div className="mb-1.5 flex items-center justify-between gap-1">
                     <span className={`grid h-6 min-w-6 place-items-center rounded-full px-1 text-xs tabular-nums ${
                       isToday ? 'bg-brand font-semibold text-white' : inMonth ? 'font-medium text-ink' : 'text-ink-400'}`}>{d.getUTCDate()}</span>

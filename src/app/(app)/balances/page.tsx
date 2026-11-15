@@ -8,7 +8,8 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { PersonCell } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Badge } from '@/components/ui/Badge';
-import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
+import { Table, TableScroll, Td, Th } from '@/components/ui/Table';
+import { RowLink } from '@/components/ui/RowLink';
 import { FilterBar } from '@/components/FilterBar';
 
 export const metadata = { title: 'Leave balances' };
@@ -61,7 +62,7 @@ export default async function BalancesPage({ searchParams }: { searchParams: Pro
                   const pending = Number(r.pending_casual) + Number(r.pending_earned) + Number(r.pending_wfh);
                   const atCap = Number(r.earned) >= EL_CAP;
                   return (
-                    <Tr key={r.employee_id}>
+                    <RowLink key={r.employee_id} href={`/employees/${r.employee_id}`}>
                       <Td><PersonCell name={r.full_name} sub={r.employee_code} href={`/employees/${r.employee_id}`} /></Td>
                       <Td className="text-ink-600">{CATEGORY_LABEL[r.category]}</Td>
                       <Td align="right"><Cell value={days(r.casual)} sub={`+${days(r.casual_per_month)}/mo`} /></Td>
@@ -70,7 +71,7 @@ export default async function BalancesPage({ searchParams }: { searchParams: Pro
                         {r.category === 'permanent_wfh' ? <span className="text-ink-400">—</span> : <Cell value={days(r.wfh)} sub={`of ${days(r.wfh_per_month)}`} />}
                       </Td>
                       <Td align="right">{pending > 0 ? <Badge tone="warning">{days(pending)}</Badge> : <span className="text-ink-400">—</span>}</Td>
-                    </Tr>
+                    </RowLink>
                   );
                 })}
               </tbody>

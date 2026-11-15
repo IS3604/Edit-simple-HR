@@ -2,6 +2,7 @@ import { isStaff, requireProfile } from '@/lib/auth';
 import { navFor } from '@/lib/nav';
 import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/Sidebar';
+import { NotificationCenter } from '@/components/NotificationCenter';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const me = await requireProfile();
@@ -23,6 +24,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <main className="min-w-0 flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-10">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
+      <NotificationCenter />
     </div>
   );
 }

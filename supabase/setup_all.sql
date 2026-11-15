@@ -1,4 +1,4 @@
--- EditSimple HR — complete database setup (migrations 0001 → 0006 in one file).
+-- EditSimple HR — complete database setup (migrations 0001 → 0008 in one file).
 -- Use on a NEW Supabase project. For an existing one, run only the migrations you haven't applied.
 
 
@@ -1219,3 +1219,158 @@ grant  execute on function public.apply_leave(public.leave_type, date, date, tex
 grant  execute on function public.decide_request(uuid, boolean, text) to authenticated;
 grant  execute on function public.cancel_request(uuid) to authenticated;
 grant  execute on function public.team_calendar(date, date) to authenticated;
+
+-- >>>>>>>>>> 0007_scenario_fixes.sql <<<<<<<<<<
+-- =====================================================================
+-- EditSimple HR — 0007 Fixes found by the AI-employee scenario simulation
+-- =====================================================================
+
+-- 1) apply_leave: report overlaps before balance problems; tidy numbers in messages.
+create or replace function public.apply_leave(
+  p_type     public.leave_type,
+  p_start    date,
+  p_end      date,
+  p_reason   text    default '',
+  p_half_day boolean default false,
+  p_session  text    default null,
+  p_raise    boolean default false     -- true = "raise a request" for days beyond balance
+) returns json
+language plpgsql security definer set search_path = public as $$
+declare
+  e        public.employees;
+  b        public.leave_balances;
+  v_today  date := public.today_local();
+  v_month  date := date_trunc('month', public.today_local())::date;
+  v_days   numeric;
+  v_bal    numeric;
+  v_id     uuid;
+  v_status public.request_status;
+begin
+  select * into e from public.employees where id = public.my_employee_id();
+  if not found then raise exception 'Your login is not linked to an employee record' using errcode = 'P0001'; end if;
+  if e.status <> 'active' then raise exception 'Your account is inactive' using errcode = 'P0001'; end if;
+  if p_start is null then raise exception 'Choose a start date' using errcode = 'P0001'; end if;
+  if p_half_day then p_end := p_start; end if;
+  if p_end is null then p_end := p_start; end if;
+  if p_end < p_start then raise exception 'End date must be on or after the start date' using errcode = 'P0001'; end if;
+  if p_end - p_start > 60 then raise exception 'One request can cover at most 60 days' using errcode = 'P0001'; end if;
+  if length(coalesce(p_reason, '')) > 500 then raise exception 'Reason must be under 500 characters' using errcode = 'P0001'; end if;
+  if p_start < e.joining_date then raise exception 'Dates can''t be before your joining date' using errcode = 'P0001'; end if;
+  if p_half_day and coalesce(p_session, '') not in ('first', 'second') then
+    raise exception 'Choose first half or second half' using errcode = 'P0001';
+  end if;
+  if p_raise and length(trim(coalesce(p_reason, ''))) = 0 then
+    raise exception 'Add a reason when requesting extra days' using errcode = 'P0001';
+  end if;
+
+  if p_type = 'wfh' then
+    if e.category = 'permanent_wfh' then
+      raise exception 'Permanent WFH employees don''t need WFH requests' using errcode = 'P0001';
+    end if;
+    if p_start < v_today then raise exception 'WFH can''t be requested for past dates' using errcode = 'P0001'; end if;
+    if date_trunc('month', p_end)::date <> v_month then
+      raise exception 'WFH can only be requested for the current month' using errcode = 'P0001';
+    end if;
+  else
+    if p_start < v_today - 30 then raise exception 'Leave can be back-dated by at most 30 days' using errcode = 'P0001'; end if;
+    if p_type = 'casual' and (extract(year from p_start) <> extract(year from v_today)
+                              or extract(year from p_end) <> extract(year from v_today)) then
+      raise exception 'Casual Leave can only be taken within the current calendar year' using errcode = 'P0001';
+    end if;
+  end if;
+
+  v_days := public.working_days(p_start, p_end);
+  if v_days = 0 then raise exception 'The selected dates have no working days' using errcode = 'P0001'; end if;
+  if p_half_day then v_days := 0.5; end if;
+
+  select * into b from public.leave_balances where employee_id = e.id for update;
+
+  -- Check overlap first: it's the more useful message.
+  if exists (select 1 from public.leave_requests
+             where employee_id = e.id and status in ('pending', 'approved')
+               and daterange(start_date, end_date, '[]') && daterange(p_start, p_end, '[]')) then
+    raise exception 'These dates overlap another pending or approved request' using errcode = 'P0001';
+  end if;
+
+  v_bal := public._usable_balance(b, p_type, p_start);
+
+  if v_days > v_bal and not p_raise then
+    raise exception 'Only % day(s) available. Raise a request to the Superadmin for extra days.', trim_scale(v_bal)
+      using errcode = 'P0001';
+  end if;
+
+  v_status := case when v_days <= v_bal then 'approved' else 'pending' end;
+
+  begin
+    insert into public.leave_requests
+      (employee_id, leave_type, start_date, end_date, days, reason, status, half_day, half_day_session,
+       is_extra, auto_approved, decided_at, decision_note)
+    values
+      (e.id, p_type, p_start, p_end, v_days, coalesce(trim(p_reason), ''), v_status, p_half_day,
+       case when p_half_day then p_session end,
+       v_status = 'pending', v_status = 'approved',
+       case when v_status = 'approved' then now() end,
+       case when v_status = 'approved' then 'Auto-approved (within balance)' else '' end)
+    returning id into v_id;
+  exception when exclusion_violation then
+    raise exception 'These dates overlap another pending or approved request' using errcode = 'P0001';
+  end;
+
+  if v_status = 'approved' then
+    perform public._post_txn(e.id, p_type, 'debit', -v_days, null, v_id, null,
+      case when p_half_day then format('%s (%s half)', to_char(p_start, 'DD Mon YYYY'), p_session)
+           else format('%s to %s', to_char(p_start, 'DD Mon'), to_char(p_end, 'DD Mon YYYY')) end,
+      auth.uid());
+  end if;
+
+  return json_build_object('id', v_id, 'status', v_status, 'days', v_days, 'available', v_bal);
+end $$;
+
+
+-- >>>>>>>>>> 0008_push_subscriptions.sql <<<<<<<<<<
+-- =====================================================================
+-- EditSimple HR — 0008 Web push subscriptions
+-- One row per browser/device that turned on notifications.
+-- =====================================================================
+create table if not exists public.push_subscriptions (
+  id          uuid primary key default gen_random_uuid(),
+  profile_id  uuid not null references public.profiles (id) on delete cascade,
+  endpoint    text not null unique,
+  p256dh      text not null,
+  auth        text not null,
+  user_agent  text not null default '',
+  created_at  timestamptz not null default now()
+);
+create index if not exists push_subscriptions_profile_idx on public.push_subscriptions (profile_id);
+
+alter table public.push_subscriptions enable row level security;
+revoke all on public.push_subscriptions from anon;
+revoke insert, update, delete on public.push_subscriptions from authenticated;
+
+create policy push_read_own on public.push_subscriptions for select to authenticated
+  using (profile_id = auth.uid());
+
+-- Save (or move to the current user) a browser subscription.
+create or replace function public.save_push_subscription(p_endpoint text, p_p256dh text, p_auth text, p_user_agent text default '')
+returns void language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'Not signed in' using errcode = '42501'; end if;
+  if p_endpoint !~ '^https://' or length(p_endpoint) > 1000 or length(p_p256dh) > 200 or length(p_auth) > 100 then
+    raise exception 'Invalid subscription' using errcode = 'P0001';
+  end if;
+  insert into public.push_subscriptions (profile_id, endpoint, p256dh, auth, user_agent)
+  values (auth.uid(), p_endpoint, p_p256dh, p_auth, left(coalesce(p_user_agent, ''), 300))
+  on conflict (endpoint) do update
+    set profile_id = excluded.profile_id, p256dh = excluded.p256dh, auth = excluded.auth,
+        user_agent = excluded.user_agent, created_at = now();
+end $$;
+
+create or replace function public.delete_push_subscription(p_endpoint text)
+returns void language sql security definer set search_path = public as $$
+  delete from public.push_subscriptions where endpoint = p_endpoint and profile_id = auth.uid();
+$$;
+
+revoke execute on function public.save_push_subscription(text, text, text, text) from public, anon;
+revoke execute on function public.delete_push_subscription(text) from public, anon;
+grant  execute on function public.save_push_subscription(text, text, text, text) to authenticated;
+grant  execute on function public.delete_push_subscription(text) to authenticated;

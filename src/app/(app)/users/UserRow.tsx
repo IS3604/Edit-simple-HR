@@ -30,7 +30,7 @@ export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
         <label className="inline-flex cursor-pointer items-center gap-2">
           <input form={formId} type="checkbox" name="is_active" checked={active} onChange={(e) => setActive(e.target.checked)}
             disabled={isSelf || pending} className="peer sr-only" />
-          <span className="relative h-5 w-9 rounded-full bg-stone-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-emerald-500 peer-checked:after:translate-x-4 peer-focus-visible:ring-[3px] peer-focus-visible:ring-brand/25 peer-disabled:opacity-50" />
+          <span className="relative h-5 w-9 rounded-full bg-zinc-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-emerald-500 peer-checked:after:translate-x-4 peer-focus-visible:ring-[3px] peer-focus-visible:ring-brand/25 peer-disabled:opacity-50" />
           <Badge tone={active ? 'success' : 'muted'}>{active ? 'Active' : 'Inactive'}</Badge>
         </label>
       </Td>

@@ -1,6 +1,9 @@
 import type { Metadata, Viewport } from 'next';
-import { GeistSans } from 'geist/font/sans';
-import { GeistMono } from 'geist/font/mono';
+import '@fontsource/ibm-plex-sans/400.css';
+import '@fontsource/ibm-plex-sans/500.css';
+import '@fontsource/ibm-plex-sans/600.css';
+import '@fontsource/ibm-plex-mono/400.css';
+import '@fontsource/ibm-plex-mono/500.css';
 import { Toaster } from '@/components/ui/Toaster';
 import './globals.css';
 
@@ -8,13 +11,15 @@ export const metadata: Metadata = {
   title: { default: 'EditSimple HR', template: '%s · EditSimple HR' },
   description: 'Internal HR portal for EditSimple',
   robots: { index: false, follow: false },
+  applicationName: 'EditSimple HR',
+  appleWebApp: { capable: true, title: 'EditSimple HR', statusBarStyle: 'default' },
 };
 
-export const viewport: Viewport = { themeColor: '#F7F6F4' };
+export const viewport: Viewport = { themeColor: '#FFFFFF', width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+    <html lang="en">
       <body className="font-sans">
         {children}
         <Toaster />

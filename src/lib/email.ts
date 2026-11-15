@@ -1,7 +1,8 @@
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { days as fmtDays, formatDate } from '@/lib/format';
-import { LEAVE_LABEL, type LeaveType } from '@/lib/types';
+import { LEAVE_LABEL, LEAVE_SHORT, type LeaveType } from '@/lib/types';
+import { pushToProfile, pushToRoles } from '@/lib/push';
 
 /**
  * Transactional email via Resend (https://resend.com). Optional:
@@ -59,14 +60,14 @@ type RequestInfo = {
   half_day_session: 'first' | 'second' | null;
   extra_days: number;
   decision_note: string;
-  employee: { full_name: string; email: string } | null;
+  employee: { full_name: string; email: string; profile_id: string | null } | null;
 };
 
 async function loadRequest(id: string): Promise<RequestInfo | null> {
   const admin = createAdminClient();
   const { data } = await admin
     .from('leave_requests')
-    .select('id, leave_type, start_date, end_date, days, reason, half_day, half_day_session, extra_days, decision_note, employee:employees!leave_requests_employee_id_fkey(full_name, email)')
+    .select('id, leave_type, start_date, end_date, days, reason, half_day, half_day_session, extra_days, decision_note, employee:employees!leave_requests_employee_id_fkey(full_name, email, profile_id)')
     .eq('id', id)
     .maybeSingle();
   return (data as unknown as RequestInfo) ?? null;
@@ -92,10 +93,31 @@ const baseRows = (r: RequestInfo): [string, string][] => [
 
 export type NotifyEvent = 'auto_approved' | 'extra_requested' | 'approved' | 'rejected' | 'cancelled';
 
+/** Email + web push for a request event. Never throws. */
 export async function notifyRequest(id: string, event: NotifyEvent, refunded = 0) {
-  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM || !process.env.SUPABASE_SERVICE_ROLE_KEY) return;
-  const r = await loadRequest(id);
-  if (!r) return;
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return;
+  try {
+    const r = await loadRequest(id);
+    if (!r) return;
+    await Promise.all([pushFor(r, event), emailFor(r, event, refunded)]);
+  } catch (err) {
+    console.error('[notify] failed', err);
+  }
+}
+
+async function pushFor(r: RequestInfo, event: NotifyEvent) {
+  const who = r.employee?.full_name ?? 'An employee';
+  const what = `${LEAVE_SHORT[r.leave_type]} · ${dateText(r)} · ${fmtDays(r.days)} day${Number(r.days) === 1 ? '' : 's'}`;
+  const emp = r.employee?.profile_id;
+  if (event === 'extra_requested') {
+    await pushToRoles(['superadmin'], { title: `${who} requested extra days`, body: `${what}${r.reason ? ` — “${r.reason}”` : ''}`, url: '/requests', tag: `req-${r.id}` });
+  } else if ((event === 'approved' || event === 'rejected') && emp) {
+    await pushToProfile(emp, { title: event === 'approved' ? 'Your request was approved' : 'Your request was not approved', body: what, url: '/leave', tag: `req-${r.id}` });
+  }
+}
+
+async function emailFor(r: RequestInfo, event: NotifyEvent, refunded: number) {
+  if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) return;
   const emp = r.employee?.email ? [r.employee.email] : [];
   const who = r.employee?.full_name ?? 'An employee';
 

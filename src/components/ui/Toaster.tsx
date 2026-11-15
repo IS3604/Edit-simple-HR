@@ -40,7 +40,7 @@ export function Toaster() {
     <div className="pointer-events-none fixed inset-x-0 bottom-4 z-50 flex flex-col items-center gap-2 px-4 sm:inset-x-auto sm:right-4 sm:items-end" aria-live="polite">
       {toasts.map((t) => (
         <div key={t.id} role={t.type === 'error' ? 'alert' : 'status'}
-          className="animate-toast-in pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-line bg-white px-4 py-3 text-sm shadow-pop">
+          className="animate-toast-in pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border border-line bg-white px-4 py-3 text-sm shadow-pop">
           {t.type === 'success'
             ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
             : <XCircle className="mt-0.5 h-4 w-4 shrink-0 text-red-600" aria-hidden />}
