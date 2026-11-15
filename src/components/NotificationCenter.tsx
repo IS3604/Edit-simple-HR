@@ -13,6 +13,7 @@ export function NotificationCenter() {
     if (!pushSupported()) return;
     navigator.serviceWorker.register('/sw.js', { scope: '/' }).then(() => syncPush()).catch(() => {});
     const onMessage = (e: MessageEvent) => {
+      if (e.data?.type === 'es-resubscribe') { void syncPush(); return; }
       if (e.data?.type !== 'es-push') return;
       if (document.visibilityState === 'visible') playChime();
       toast([e.data.title, e.data.body].filter(Boolean).join(' — '), 'success');

@@ -23,9 +23,16 @@ export async function removePushSubscription(endpoint: string) {
   return { ok: true };
 }
 
-export async function sendTestPush() {
+export async function sendTestPush(): Promise<{ ok?: string; error?: string }> {
   const me = await requireProfile();
-  if (!pushEnabled()) return { error: 'Push isn’t configured on the server yet (VAPID keys missing).' };
-  await pushToProfile(me.id, { title: 'Notifications are on', body: 'You’ll hear this chime when something needs you.', url: '/', tag: 'test' });
-  return { ok: true };
+  if (!pushEnabled()) return { error: 'Server is missing VAPID_PRIVATE_KEY. Add it in Vercel and redeploy.' };
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { error: 'Server is missing SUPABASE_SERVICE_ROLE_KEY.' };
+  const r = await pushToProfile(me.id, { title: 'Notifications are on', body: 'You’ll hear this chime when something needs you.', url: '/', tag: 'test' });
+  if (!r) return { error: 'Push is not configured on the server.' };
+  if (r.devices === 0) return { error: 'No device is registered for you yet. Turn notifications off and on again on this device.' };
+  if (r.sent === 0) {
+    const f = r.failed[0];
+    return { error: r.expired ? 'This device’s subscription had expired — turn notifications on again.' : `Push service rejected the message${f?.status ? ` (${f.status})` : ''}: ${f?.message ?? 'unknown error'}` };
+  }
+  return { ok: `Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}. It should appear in a few seconds.` };
 }

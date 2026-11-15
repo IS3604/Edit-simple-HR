@@ -42,7 +42,7 @@ export async function enablePush(): Promise<PushState> {
   const sub = (await reg.pushManager.getSubscription()) ??
     (await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(VAPID) }));
   const res = await savePushSubscription(JSON.parse(JSON.stringify(sub)), navigator.userAgent);
-  if ('error' in res && res.error) throw new Error(res.error);
+  if ('error' in res && res.error) throw new Error(`${res.error} (Has migration 0008 been run in Supabase?)`);
   return 'on';
 }
 

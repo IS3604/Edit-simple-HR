@@ -34,6 +34,8 @@ jobs:
           PGPASSWORD: postgres
           APPLY_P: '0.25'
           CANCEL_P: '0.1'
+      - name: Push notification simulation (VAPID + encryption + recipients)
+        run: npm run test:push
       - name: Build
         run: npm run build
         env:

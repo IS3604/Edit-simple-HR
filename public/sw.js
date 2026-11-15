@@ -7,18 +7,24 @@ self.addEventListener('push', (event) => {
   try { data = event.data ? event.data.json() : {}; } catch { data = { body: event.data && event.data.text() }; }
   event.waitUntil((async () => {
     const windows = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    const visible = windows.some((c) => c.visibilityState === 'visible');
-    // When the app is open and visible, the page plays the EditSimple chime instead of the OS sound.
-    await self.registration.showNotification(data.title || 'EditSimple HR', {
-      body: data.body || '',
-      icon: '/icons/icon-192.png',
-      badge: '/icons/badge-96.png',
-      tag: data.tag,
-      renotify: Boolean(data.tag),
-      silent: visible,
-      data: { url: data.url || '/' },
-    });
+    const visible = windows.some((c) => c.visibilityState === 'visible' && c.focused);
+    // Tell open tabs first (they play the EditSimple chime + refresh), so this works
+    // even if the OS notification can't be shown.
     windows.forEach((c) => c.postMessage({ type: 'es-push', title: data.title, body: data.body, url: data.url }));
+    try {
+      await self.registration.showNotification(data.title || 'EditSimple HR', {
+        body: data.body || '',
+        icon: '/icons/icon-192.png',
+        badge: '/icons/badge-96.png',
+        tag: data.tag,
+        renotify: Boolean(data.tag),
+        silent: visible, // the open tab plays the custom chime instead of the OS sound
+        requireInteraction: Boolean(data.url && data.url.startsWith('/requests')),
+        data: { url: data.url || '/' },
+      });
+    } catch (err) {
+      console.error('[sw] showNotification failed', err);
+    }
   })());
 });
 
@@ -36,4 +42,10 @@ self.addEventListener('notificationclick', (event) => {
     }
     await self.clients.openWindow(url);
   })());
+});
+
+// If the browser rotates the subscription, ask open tabs to re-save it.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    .then((ws) => ws.forEach((c) => c.postMessage({ type: 'es-resubscribe' }))));
 });

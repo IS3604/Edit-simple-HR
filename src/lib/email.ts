@@ -110,7 +110,11 @@ async function pushFor(r: RequestInfo, event: NotifyEvent) {
   const what = `${LEAVE_SHORT[r.leave_type]} · ${dateText(r)} · ${fmtDays(r.days)} day${Number(r.days) === 1 ? '' : 's'}`;
   const emp = r.employee?.profile_id;
   if (event === 'extra_requested') {
-    await pushToRoles(['superadmin'], { title: `${who} requested extra days`, body: `${what}${r.reason ? ` — “${r.reason}”` : ''}`, url: '/requests', tag: `req-${r.id}` });
+    await pushToRoles(['superadmin'], { title: `Action needed: ${who} requested extra days`, body: `${what}${r.reason ? ` — “${r.reason}”` : ''}`, url: '/requests', tag: `req-${r.id}` });
+  } else if (event === 'auto_approved') {
+    await pushToRoles(['superadmin'], { title: `${who} · ${r.leave_type === 'wfh' ? 'WFH' : 'leave'} booked`, body: `${what} — auto-approved (within balance)`, url: '/calendar', tag: `req-${r.id}` });
+  } else if (event === 'cancelled') {
+    await pushToRoles(['superadmin'], { title: `${who} cancelled ${r.leave_type === 'wfh' ? 'WFH' : 'leave'}`, body: what, url: '/calendar', tag: `req-${r.id}` });
   } else if ((event === 'approved' || event === 'rejected') && emp) {
     await pushToProfile(emp, { title: event === 'approved' ? 'Your request was approved' : 'Your request was not approved', body: what, url: '/leave', tag: `req-${r.id}` });
   }

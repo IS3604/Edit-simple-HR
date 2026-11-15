@@ -25,3 +25,10 @@ Test-harness issues (not app bugs) were also corrected.
 - First and second half of the same date can't both be booked.
 - Admins/Superadmins have no "My leave" page, so they can't apply for their own leave in the app.
 - Extra days beyond balance are recorded on the request; whether they're unpaid is a payroll decision.
+
+## Push notifications (16 Nov 2026)
+
+- `tests/push.sim.mts` runs the real server code (`src/lib/push.ts`, `web-push`) against a mock Supabase API and a mock HTTPS push service: extra-day request reaches every Superadmin device (VAPID-signed, aes128gcm-encrypted), not admins/employees; decisions reach only the employee; expired (410) subscriptions are deleted; users without devices are reported.
+- Browser check (Chromium, DevTools `deliverPushMessage`) on the built app: the service worker shows the notification (correct title/body/link, sticky for action-needed requests) and the open tab receives the message to play the chime and refresh.
+- **Bug fixed:** if the browser refused to display the notification, the open tab was never told either (no chime, no refresh). The tab is now notified first and display errors are caught.
+- **Improved:** Superadmins are now also notified when leave/WFH is auto-approved or cancelled; “Send test notification” now reports exactly what's wrong (missing key, no device registered, push service error).

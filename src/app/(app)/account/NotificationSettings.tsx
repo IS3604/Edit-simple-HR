@@ -44,7 +44,7 @@ export function NotificationSettings({ superadmin }: { superadmin: boolean }) {
         {state === 'on' ? (
           <>
             <Button variant="secondary" size="sm" loading={busy} onClick={() => run(disablePush)}>Turn off</Button>
-            <Button variant="secondary" size="sm" onClick={async () => { const r = await sendTestPush(); if ('error' in r && r.error) toast(r.error, 'error'); }}>Send test notification</Button>
+            <Button variant="secondary" size="sm" onClick={async () => { const r = await sendTestPush(); if (r.error) toast(r.error, 'error'); else if (r.ok) toast(r.ok); }}>Send test notification</Button>
           </>
         ) : (state === 'off') && (
           <Button size="sm" loading={busy} onClick={() => run(enablePush)}>Turn on notifications</Button>
