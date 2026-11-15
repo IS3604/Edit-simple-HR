@@ -1,0 +1,70 @@
+# Go-live checklist
+
+## 1. Supabase
+
+1. Create a project at supabase.com (region: Mumbai `ap-south-1` is closest).
+2. **SQL Editor → New query** → paste all of `supabase/setup_all.sql` → **Run**.
+   - Already ran some migrations earlier? Run only the missing files from `supabase/migrations/` in order
+     (e.g. `0004_requests_grants_overview.sql`, then `0005_cron.sql`).
+   - If `0005` fails with a pg_cron error: **Database → Extensions → enable `pg_cron`**, then run `0005_cron.sql` again.
+3. **Authentication → Sign In / Providers → Email**: keep Email enabled, turn **off "Allow new users to sign up"**. HR creates every account.
+4. **Authentication → URL Configuration → Site URL**: set to your production URL (after step 3 below).
+5. **Project Settings → API**: copy the Project URL, `anon` key and `service_role` key.
+6. Check the scheduled jobs (SQL Editor):
+   ```sql
+   select jobname, schedule, active from cron.job;
+   -- es-hr-monthly-accrual     35 18 * * *    (00:05 IST daily; credits once per month)
+   -- es-hr-year-end-cl-expiry  20 18 31 12 *  (23:50 IST on 31 Dec)
+   ```
+
+## 2. GitHub
+
+```bash
+cd editsimple-hr
+git init && git add . && git commit -m "EditSimple HR"
+git branch -M main
+git remote add origin https://github.com/<you>/editsimple-hr.git
+git push -u origin main
+```
+
+`.env.local` is git-ignored — never commit keys. CI runs automatically on push.
+
+## 3. Vercel (hosting)
+
+1. vercel.com → **Add New → Project** → import the GitHub repo (framework auto-detected: Next.js).
+2. **Environment Variables** (Production + Preview):
+
+   | Name | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
+   | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (**server only**) |
+
+3. Deploy. Put the resulting URL into Supabase **Site URL** (step 1.4).
+
+## 4. First login
+
+On your machine, with `.env.local` filled in:
+
+```bash
+npm install
+npm run create-superadmin -- you@editsimple.com 'a-strong-password' "Your Name"
+```
+
+Sign in → **Employees → Add employee** using your own email (links your login to an HR record) → set your **Monthly allocation**.
+
+## 5. Day-one setup (as Superadmin)
+
+1. **Holidays** — add this year's company holidays; confirm weekend days.
+2. **Employees → Add employee** for each person (temporary password; they change it under **My account**).
+3. Open each employee → **Monthly allocation** → save CL / EL / WFH. The first save credits the current month.
+4. Opening balances from before go-live: use **Special grants** (e.g. "Opening EL balance") — it's recorded separately in the ledger.
+5. Promote HR staff to **Admin** under **Users & roles**.
+
+## Manual jobs (rarely needed)
+
+```sql
+select public.run_monthly_accrual();          -- current month, safe to re-run
+select public.run_monthly_accrual('2027-01-01');
+select public.run_year_end_expiry(2026);      -- safe to re-run
+```
