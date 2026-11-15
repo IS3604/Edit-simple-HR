@@ -4,7 +4,10 @@ import { removePushSubscription, savePushSubscription } from '@/app/(app)/accoun
 
 export type PushState = 'unsupported' | 'unconfigured' | 'denied' | 'off' | 'on';
 
-const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ?? '';
+// Public VAPID key (safe to ship in client code). The env var overrides it if set.
+const VAPID =
+  process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY ||
+  'BDo5bdjYrOGIfPrjIhMAX-NHg1JPpG7yQaRQoQEq1JjqNsFIaajAO_7Z16374CTO-39yz8ltCm5D5j2KD8Zda4g';
 
 export function pushSupported() {
   return typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;

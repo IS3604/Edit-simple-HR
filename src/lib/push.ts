@@ -2,12 +2,14 @@ import 'server-only';
 import * as webpush from 'web-push';
 import { createAdminClient } from '@/lib/supabase/admin';
 
+const PUBLIC_KEY = 'BDo5bdjYrOGIfPrjIhMAX-NHg1JPpG7yQaRQoQEq1JjqNsFIaajAO_7Z16374CTO-39yz8ltCm5D5j2KD8Zda4g';
+
 export type PushPayload = { title: string; body: string; url?: string; tag?: string };
 
 let configured: boolean | null = null;
 function ready() {
   if (configured !== null) return configured;
-  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+  const pub = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || PUBLIC_KEY;
   const priv = process.env.VAPID_PRIVATE_KEY;
   if (!pub || !priv || !process.env.SUPABASE_SERVICE_ROLE_KEY) return (configured = false);
   webpush.setVapidDetails(process.env.VAPID_SUBJECT || 'mailto:hr@editsimple.in', pub, priv);
@@ -53,4 +55,4 @@ export async function pushToProfile(profileId: string, payload: PushPayload) {
   await deliver((data ?? []) as Sub[], payload);
 }
 
-export const pushEnabled = () => Boolean(process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY);
+export const pushEnabled = () => Boolean(process.env.VAPID_PRIVATE_KEY);
