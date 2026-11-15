@@ -1,15 +1,18 @@
 import Link from 'next/link';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
+import { todayIST } from '@/lib/leave-utils';
 import { REQUEST_COLUMNS, STATUS_LABEL, type LeaveRequest, type RequestStatus } from '@/lib/types';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { RequestsTable } from '@/components/RequestsTable';
+import { CancelButton } from '@/components/CancelButton';
 import { DecideForm } from './DecideForm';
 
 export const metadata = { title: 'Requests' };
 
 const STATUSES: (RequestStatus | 'all')[] = ['pending', 'approved', 'rejected', 'cancelled', 'all'];
+const TAB_LABEL: Record<RequestStatus | 'all', string> = { ...STATUS_LABEL, pending: 'Needs approval', all: 'All' };
 const KINDS = [
   { value: '', label: 'All types' },
   { value: 'leave', label: 'Leave' },
@@ -21,6 +24,8 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status as RequestStatus) ? (sp.status as RequestStatus | 'all') : 'pending';
   const kind = sp.kind === 'leave' || sp.kind === 'wfh' ? sp.kind : '';
+  const isSuper = me.role === 'superadmin';
+  const today = todayIST();
 
   const supabase = await createClient();
   let query = supabase.from('leave_requests').select(REQUEST_COLUMNS);
@@ -36,16 +41,30 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const href = (s: string, k = kind) => `/requests?status=${s}${k ? `&kind=${k}` : ''}`;
   const myEmployeeId = me.employee?.id;
 
+  const action = (r: LeaveRequest) => {
+    if (r.status === 'pending') {
+      if (!isSuper) return <span className="text-xs text-ink-400">Awaiting Superadmin</span>;
+      return <DecideForm id={r.id} disabledReason={myEmployeeId && r.employee_id === myEmployeeId ? 'Needs another approver' : undefined} />;
+    }
+    if (isSuper && r.status === 'approved' && r.start_date > today) return <CancelButton id={r.id} approved />;
+    return null;
+  };
+
   return (
     <>
-      <PageHeader title="Requests" description="Review leave and WFH applications. Balances are deducted only when you approve." />
+      <PageHeader
+        title="Requests"
+        description={isSuper
+          ? 'Leave within balance is approved automatically. Requests for extra days need your decision.'
+          : 'Leave within balance is approved automatically. Extra-day requests are decided by a Superadmin.'}
+      />
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex flex-wrap rounded-lg border border-line bg-white p-0.5 shadow-xs" role="tablist" aria-label="Status">
           {STATUSES.map((s) => (
             <Link key={s} href={href(s)} role="tab" aria-selected={status === s}
               className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${status === s ? 'bg-ink font-medium text-white' : 'text-ink-600 hover:text-ink'}`}>
-              {s === 'all' ? 'All' : STATUS_LABEL[s]}
+              {TAB_LABEL[s]}
             </Link>
           ))}
         </div>
@@ -68,12 +87,8 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
             showEmployee
             actionHeader={status === 'pending' ? 'Decision' : ''}
             empty={status === 'pending' ? 'All caught up' : 'No requests found'}
-            emptyDescription={status === 'pending' ? 'There are no requests waiting for approval.' : undefined}
-            action={status === 'pending' || status === 'all'
-              ? (r) => r.status === 'pending'
-                ? <DecideForm id={r.id} disabledReason={myEmployeeId && r.employee_id === myEmployeeId ? 'Needs another approver' : undefined} />
-                : null
-              : undefined}
+            emptyDescription={status === 'pending' ? 'No extra-day requests are waiting.' : undefined}
+            action={action}
           />
         )}
       </Card>

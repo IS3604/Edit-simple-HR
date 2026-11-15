@@ -111,12 +111,18 @@ export type LeaveRequest = {
   decision_note: string;
   created_at: string;
   decided_at: string | null;
+  half_day: boolean;
+  half_day_session: 'first' | 'second' | null;
+  is_extra: boolean;
+  extra_days: number;
+  auto_approved: boolean;
   employee?: { id: string; full_name: string; employee_code: string } | null;
   decider?: { full_name: string } | null;
 };
 
 export const REQUEST_COLUMNS =
   'id, employee_id, leave_type, start_date, end_date, days, reason, status, decision_note, created_at, decided_at, ' +
+  'half_day, half_day_session, is_extra, extra_days, auto_approved, ' +
   'employee:employees!leave_requests_employee_id_fkey(id, full_name, employee_code), ' +
   'decider:profiles!leave_requests_decided_by_fkey(full_name)';
 

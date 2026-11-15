@@ -5,7 +5,7 @@
 1. Create a project at supabase.com (region: Mumbai `ap-south-1` is closest).
 2. **SQL Editor → New query** → paste all of `supabase/setup_all.sql` → **Run**.
    - Already ran some migrations earlier? Run only the missing files from `supabase/migrations/` in order
-     (e.g. `0004_requests_grants_overview.sql`, then `0005_cron.sql`).
+     (e.g. `0004_requests_grants_overview.sql`, `0005_cron.sql`, `0006_auto_approve_halfday_cancel.sql`).
    - If `0005` fails with a pg_cron error: **Database → Extensions → enable `pg_cron`**, then run `0005_cron.sql` again.
 3. **Authentication → Sign In / Providers → Email**: keep Email enabled, turn **off "Allow new users to sign up"**. HR creates every account.
 4. **Authentication → URL Configuration → Site URL**: set to your production URL (after step 3 below).
@@ -39,9 +39,19 @@ git push -u origin main
    | `NEXT_PUBLIC_SUPABASE_URL` | Project URL |
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (**server only**) |
+   | `APP_URL` | your site URL, e.g. `https://editsimple-hr.vercel.app` (links in emails) |
+   | `RESEND_API_KEY` | *optional* — enables email alerts (resend.com, free tier) |
+   | `EMAIL_FROM` | *optional* — e.g. `EditSimple HR <hr@editsimple.in>` (domain verified in Resend) |
 
 3. **Settings → Functions → Function Region**: pick the region closest to your Supabase project (Supabase → Project Settings → General shows it). Mumbai `ap-south-1` → Vercel `bom1`.
 4. Deploy. Put the resulting URL into Supabase **Site URL** (step 1.4).
+
+## Email alerts (optional)
+
+1. Sign up at resend.com → **Domains** → add `editsimple.in` → add the DNS records it shows → wait for "Verified".
+2. **API Keys** → create a key → put it in Vercel as `RESEND_API_KEY`, plus `EMAIL_FROM` and `APP_URL`. Redeploy.
+
+Emails sent: auto-approved leave (employee + HR FYI), extra-day request (Superadmins), approved / rejected (employee), cancellation (employee + HR). Without these variables the app works normally and simply doesn't email.
 
 ## 4. First login
 

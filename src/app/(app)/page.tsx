@@ -30,12 +30,12 @@ export default async function DashboardPage() {
   const me = await requireProfile();
   const firstName = (me.full_name || me.email).split(/[\s@]/)[0];
   return isStaff(me.role)
-    ? <StaffDashboard firstName={firstName} myEmployeeId={me.employee?.id} />
+    ? <StaffDashboard firstName={firstName} myEmployeeId={me.employee?.id} isSuper={me.role === 'superadmin'} />
     : <EmployeeDashboard firstName={firstName} employeeId={me.employee?.id} />;
 }
 
 /* ---------------- Superadmin / Admin ---------------- */
-async function StaffDashboard({ firstName, myEmployeeId }: { firstName: string; myEmployeeId?: string }) {
+async function StaffDashboard({ firstName, myEmployeeId, isSuper }: { firstName: string; myEmployeeId?: string; isSuper: boolean }) {
   const today = todayIST();
   const supabase = await createClient();
   const [{ data: hrData }, { data: outData }, { data: pendData }] = await Promise.all([
@@ -63,21 +63,21 @@ async function StaffDashboard({ firstName, myEmployeeId }: { firstName: string; 
         <StatCard label="Permanent WFH" value={hr?.permanent_wfh ?? 0} icon={Laptop} href="/employees?category=permanent_wfh" />
         <StatCard label="On leave today" value={hr?.on_leave_today ?? 0} icon={CalendarOff} />
         <StatCard label="On WFH today" value={hr?.wfh_today ?? 0} icon={Home} />
-        <StatCard label="Pending leave" value={hr?.pending_leave ?? 0} icon={Briefcase} accent={(hr?.pending_leave ?? 0) > 0} href="/requests?status=pending&kind=leave" />
-        <StatCard label="Pending WFH" value={hr?.pending_wfh ?? 0} icon={ClipboardList} accent={(hr?.pending_wfh ?? 0) > 0} href="/requests?status=pending&kind=wfh" />
+        <StatCard label="Extra leave requests" value={hr?.pending_leave ?? 0} icon={Briefcase} accent={(hr?.pending_leave ?? 0) > 0} href="/requests?status=pending&kind=leave" />
+        <StatCard label="Extra WFH requests" value={hr?.pending_wfh ?? 0} icon={ClipboardList} accent={(hr?.pending_wfh ?? 0) > 0} href="/requests?status=pending&kind=wfh" />
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card className="overflow-hidden lg:col-span-2">
           <CardHeader
-            title="Waiting for approval"
-            description={totalPending ? `${totalPending} pending` : undefined}
+            title="Extra-day requests"
+            description={totalPending ? `${totalPending} waiting for ${isSuper ? 'your' : 'Superadmin'} decision` : 'Beyond-balance requests appear here'}
             action={totalPending > pending.length
               ? <Link href="/requests" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-700 hover:underline">View all <ArrowRight className="h-3.5 w-3.5" /></Link>
               : undefined}
           />
           {pending.length === 0 ? (
-            <EmptyState icon={ClipboardList} title="All caught up" description="No requests are waiting for approval." />
+            <EmptyState icon={ClipboardList} title="All caught up" description="Leave within balance is approved automatically." />
           ) : (
             <ul className="divide-y divide-line">
               {pending.map((r) => (
@@ -86,7 +86,10 @@ async function StaffDashboard({ firstName, myEmployeeId }: { firstName: string; 
                     <PersonCell name={r.employee?.full_name ?? '—'} href={r.employee ? `/employees/${r.employee.id}` : undefined}
                       sub={`${r.leave_type === 'wfh' ? 'WFH' : r.leave_type === 'casual' ? 'Casual Leave' : 'Earned Leave'} · ${formatDate(r.start_date)}${r.end_date !== r.start_date ? ` → ${formatDate(r.end_date)}` : ''} · ${Number(r.days)}d`} />
                   </div>
-                  <DecideForm id={r.id} disabledReason={myEmployeeId && r.employee_id === myEmployeeId ? 'Needs another approver' : undefined} />
+                  {r.reason && <p className="w-full text-xs text-ink-500 sm:order-last">“{r.reason}”</p>}
+                  {isSuper
+                    ? <DecideForm id={r.id} disabledReason={myEmployeeId && r.employee_id === myEmployeeId ? 'Needs another approver' : undefined} />
+                    : <span className="text-xs text-ink-400">Awaiting Superadmin</span>}
                 </li>
               ))}
             </ul>
@@ -96,7 +99,7 @@ async function StaffDashboard({ firstName, myEmployeeId }: { firstName: string; 
         <div className="space-y-6">
           {[{ title: 'On leave today', rows: onLeave, icon: CalendarOff }, { title: 'Working from home today', rows: onWfh, icon: Home }].map((b) => (
             <Card key={b.title} className="overflow-hidden">
-              <CardHeader title={b.title} action={<Badge>{b.rows.length}</Badge>} />
+              <CardHeader title={b.title} action={<div className="flex items-center gap-2"><Badge>{b.rows.length}</Badge><Link href="/calendar" className="text-[13px] font-medium text-brand-700 hover:underline">Calendar</Link></div>} />
               {b.rows.length === 0 ? (
                 <p className="px-5 py-4 text-sm text-ink-500">Nobody today.</p>
               ) : (

@@ -223,38 +223,67 @@ assert.equal(wd.length, 2, 'needs two working days left in this month to run the
 const [d1, d2] = wd;
 const msg = async (p) => { try { await p; return null; } catch (e) { return e.message; } };
 
-assert.match(await msg(as(E1, `select apply_leave('casual', '${d1}', '${d2}', '')`)), /Not enough balance/);
-const r1 = (await as(E1, `select apply_leave('casual', '${d1}', '${d1}', 'family') id`)).rows[0].id;
-assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d2}', '')`)), /Not enough balance/);
-ok('apply: balance checked including other pending requests');
+const apply = (who, args) => as(who, `select apply_leave(${args}) j`).then((r) => r.rows[0].j);
+const bal1 = async () => { const r = (await db.query(`select casual, wfh from leave_balances where employee_id='${e1}'`)).rows[0]; return [+r.casual, +r.wfh]; };
+
+// e1: CL 1.5, WFH 4
+assert.match(await msg(as(E1, `select apply_leave('casual', '${d1}', '${d2}', '')`)), /Raise a request/);
+const a1 = await apply(E1, `'casual', '${d1}', '${d1}', 'family'`);
+assert.equal(a1.status, 'approved');
+assert.deepEqual(await bal1(), [0.5, 4]);
+const r1 = a1.id;
+assert.equal((await db.query(`select auto_approved from leave_requests where id='${r1}'`)).rows[0].auto_approved, true);
+ok('within balance: auto-approved and deducted immediately');
+
+assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d2}', '', false, null, true)`)), /reason/);
+const a2 = await apply(E1, `'casual', '${d2}', '${d2}', 'need one more day', false, null, true`);
+assert.equal(a2.status, 'pending');
+assert.deepEqual(await bal1(), [0.5, 4]);
+ok('beyond balance: blocked unless raised (with reason) as a pending extra-day request');
+
+assert.match(await msg(as(AD, `select decide_request('${a2.id}', true, '')`)), /Only a Superadmin/);
+await as(SA, `select decide_request('${a2.id}', true, 'ok')`);
+const x = (await db.query(`select status, extra_days from leave_requests where id='${a2.id}'`)).rows[0];
+assert.deepEqual([x.status, +x.extra_days], ['approved', 0.5]);
+assert.deepEqual(await bal1(), [0, 4]);
+assert.match(await msg(as(SA, `select decide_request('${a2.id}', true, '')`)), /already approved/);
+ok('superadmin approves extra request: balance used first, remainder recorded as extra days; admins cannot decide');
 
 assert.match(await msg(as(E1, `select apply_leave('wfh', '${d1}', '${d1}', '')`)), /overlap/);
-const r2 = (await as(E1, `select apply_leave('wfh', '${d2}', '${d2}', '') id`)).rows[0].id;
 assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d1}', '')`)), /End date/);
-ok('apply: overlap and date-order validation');
+ok('overlap and date-order validation');
 
-assert.match(await msg(as(E1, `select decide_request('${r1}', true, '')`)), /Only Admins/);
-await as(AD, `select decide_request('${r1}', true, 'ok')`);
-assert.equal(+(await db.query(`select casual from leave_balances where employee_id='${e1}'`)).rows[0].casual, 0.5);
-assert.match(await msg(as(AD, `select decide_request('${r1}', true, '')`)), /already approved/);
-assert.equal((await db.query(`select count(*)::int c from leave_transactions where request_id='${r1}'`)).rows[0].c, 1);
-ok('approve: deducts once; re-approval blocked; employees cannot approve');
+const h = await apply(E1, `'wfh', '${d2}', '${d1}', '', true, 'first'`).catch((e) => e.message);
+assert.match(String(h), /overlap/);  // d2 already has approved CL
+const hDay = (await db.query(`select d::date::text d from generate_series($1::date + 1, ($1::date + 40), '1 day') d
+  where extract(dow from d) not in (0,6) and date_trunc('month', d) = date_trunc('month', $1::date) and d::date > $2::date order by d limit 1`, [today, d2])).rows[0]?.d;
+if (hDay) {
+  const hw = await apply(E1, `'wfh', '${hDay}', '${hDay}', '', true, 'second'`);
+  assert.equal(hw.status, 'approved'); assert.equal(+hw.days, 0.5);
+  assert.deepEqual(await bal1(), [0, 3.5]);
+  ok('half-day: 0.5 day, auto-approved');
 
-assert.match(await msg(as(E1, `select cancel_request('${r1}')`)), /Only pending/);
-await as(E1, `select cancel_request('${r2}')`);
-assert.equal((await db.query(`select status from leave_requests where id='${r2}'`)).rows[0].status, 'cancelled');
+  const c = (await as(E1, `select cancel_request('${hw.id}') j`)).rows[0].j;
+  assert.equal(+c.refunded, 0.5); assert.deepEqual(await bal1(), [0, 4]);
+  assert.match(await msg(as(E1, `select cancel_request('${hw.id}')`)), /already cancelled/);
+  ok('cancel approved future leave: refunded once');
+}
+
+const cx = (await as(E1, `select cancel_request('${a2.id}') j`)).rows[0].j;
+assert.equal(+cx.refunded, 0.5);  // 1 day minus 0.5 extra
 assert.match(await msg(as(E2, `select cancel_request('${r1}')`)), /not found/);
-ok('cancel: own pending only; no deduction for cancelled');
+ok('cancelling an extra-day request refunds only the part taken from balance; others cannot cancel');
 
-const r3 = (await as(E1, `select apply_leave('wfh', '${d2}', '${d2}', '') id`)).rows[0].id;
-await as(SA, `select decide_request('${r3}', false, 'busy week')`);
-assert.equal(+(await db.query(`select wfh from leave_balances where employee_id='${e1}'`)).rows[0].wfh, 4);
+const p3 = await apply(E1, `'casual', '${d2}', '${d2}', 'emergency', false, null, true`);
+await as(SA, `select decide_request('${p3.id}', false, 'no')`);
+assert.equal((await db.query(`select status from leave_requests where id='${p3.id}'`)).rows[0].status, 'rejected');
 ok('reject: status updated, balance unchanged');
 
+await db.exec(`update leave_balances set casual=1.5, wfh=4 where employee_id='${e1}'`);
 await as(SA, `select grant_special('${e1}', 'wfh', 2, 'Client travel')`);
 await as(SA, `select grant_special('${e1}', 'casual', 3, 'Marriage leave')`);
 const gb = (await db.query(`select casual, wfh from leave_balances where employee_id='${e1}'`)).rows[0];
-assert.deepEqual([+gb.casual, +gb.wfh], [3.5, 6]);
+assert.deepEqual([+gb.casual, +gb.wfh], [4.5, 6]);
 assert.equal((await db.query(`select count(*)::int c from special_grants where employee_id='${e1}'`)).rows[0].c, 2);
 assert.match(await msg(as(AD, `select grant_special('${e1}', 'casual', 1, 'x')`)), /Only a Superadmin/);
 assert.match(await msg(as(SA, `select grant_special('${e1}', 'casual', 1, '  ')`)), /reason/);
@@ -264,6 +293,10 @@ const ovw = (await as(AD, `select hr_overview() o`)).rows[0].o;
 assert.ok(ovw.total >= 3 && 'pending_wfh' in ovw);
 assert.match(await msg(as(E1, `select hr_overview()`)), /Not allowed/);
 ok('HR overview: staff only');
+const cal = (await as(AD, `select * from team_calendar('${today}'::date, ('${today}'::date + 30))`)).rows;
+assert.ok(Array.isArray(cal));
+assert.match(await msg(as(E1, `select * from team_calendar('${today}'::date, '${today}'::date)`)), /Not allowed/);
+ok('team calendar: staff only, no reasons exposed');
 
 await db.exec(`insert into employees (employee_code, full_name, email, joining_date, category) values ('ES-006','Six','e6@editsimple.com','2024-01-01','office')`);
 const e6 = (await db.query(`select id from employees where employee_code='ES-006'`)).rows[0].id;

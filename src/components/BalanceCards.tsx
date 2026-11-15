@@ -21,7 +21,6 @@ export function BalanceCards({ row }: { row: LeaveOverview }) {
   return (
     <div className={`grid gap-4 ${cards.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
       {cards.map((c) => {
-        const available = Math.max(0, Number(c.value) - Number(c.pending));
         return (
           <div key={c.label} className="rounded-xl border border-line bg-white p-5 shadow-soft">
             <div className="flex items-center gap-2 text-[13px] font-medium text-ink-500">
@@ -39,9 +38,7 @@ export function BalanceCards({ row }: { row: LeaveOverview }) {
             )}
             <p className="mt-3 text-xs text-ink-500">{c.hint}</p>
             {Number(c.pending) > 0 && (
-              <p className="mt-2 text-xs text-amber-700">
-                {days(c.pending)} pending · {days(available)} available to apply
-              </p>
+              <p className="mt-2 text-xs text-amber-700">{days(c.pending)} extra day(s) awaiting Superadmin</p>
             )}
           </div>
         );

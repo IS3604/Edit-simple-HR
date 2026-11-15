@@ -11,9 +11,9 @@ Internal HR portal for EditSimple — employees, monthly leave allocations (CL /
 
 | Role | Can do |
 |---|---|
-| **Superadmin** | Everything Admin can, plus: add / edit / deactivate employees, set roles, monthly allocations, special grants, holidays & weekend days, reset passwords |
-| **Admin** | HR overview, view employees / balances / history, approve or reject leave & WFH (not their own), see who is out today |
-| **Employee** | Own balances, apply for CL / EL / WFH, see history, cancel pending requests (My leave is employee-only; staff screens are HR-only) |
+| **Superadmin** | Everything Admin can, plus: decide extra-day requests, cancel approved leave, add / edit / deactivate employees, set roles, monthly allocations, special grants, holidays & weekend days, reset passwords |
+| **Admin** | HR overview, team calendar, view employees / balances / history and all requests, see who is out today |
+| **Employee** | Own balances; apply for CL / EL / WFH (full or half day) — **auto-approved within balance**, or raise an extra-day request to the Superadmin; cancel pending or not-yet-started leave (refunded) |
 
 Leave rules (enforced in the database):
 
@@ -23,7 +23,7 @@ Leave rules (enforced in the database):
 | Earned Leave | Monthly, per employee | Yes | Monthly credit stops at 20 days (partial fill) |
 | WFH | Monthly, per employee | No | Resets on the 1st of every month |
 
-Working days exclude configurable weekend days and company holidays. Balances are deducted only on approval, exactly once.
+Working days exclude configurable weekend days and company holidays. Each approval deducts exactly once; cancelling refunds exactly once. Optional email alerts via Resend.
 
 ## Project layout
 
@@ -32,7 +32,7 @@ src/app/(app)/         dashboard, leave, requests, employees, balances, grants, 
 src/app/login/         sign-in
 src/components/        shared UI (balance cards, tables, forms)
 src/lib/               Supabase clients, auth guard, types, validation
-supabase/migrations/   0001 → 0005 (schema, RLS, balance engine, requests, cron)
+supabase/migrations/   0001 → 0006 (schema, RLS, balance engine, requests, cron)
 supabase/setup_all.sql all migrations in one file for a new project
 tests/                 database tests (PGlite) — RLS, constraints, balance engine
 scripts/               create-superadmin
@@ -53,7 +53,7 @@ Database setup: see [`docs/DEPLOY.md`](docs/DEPLOY.md) step 1.
 
 ```bash
 npm run typecheck
-npm run test:db     # 36 checks: RLS, role guards, constraints, idempotent accrual, approvals, grants
+npm run test:db     # 40 checks: RLS, role guards, constraints, idempotent accrual, approvals, grants
 npm run build
 ```
 

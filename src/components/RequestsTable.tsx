@@ -56,14 +56,22 @@ export function RequestsTable({
                 {formatDate(r.start_date)}
                 {r.end_date !== r.start_date && <span className="text-ink-400"> → </span>}
                 {r.end_date !== r.start_date && formatDate(r.end_date)}
+                {r.half_day && <span className="block text-xs text-ink-500">{r.half_day_session === 'first' ? 'First half' : 'Second half'}</span>}
               </Td>
-              <Td align="right" className="font-medium">{days(r.days)}</Td>
+              <Td align="right" className="font-medium">
+                {days(r.days)}
+                {Number(r.extra_days) > 0 && <span className="block text-xs font-normal text-amber-700">{days(r.extra_days)} extra</span>}
+              </Td>
               <Td className="max-w-[240px] text-ink-600">
                 <span className="line-clamp-2" title={r.reason || undefined}>{r.reason || <span className="text-ink-400">—</span>}</span>
               </Td>
               <Td>
-                <Badge tone={statusTone[r.status]} dot>{STATUS_LABEL[r.status]}</Badge>
-                {(r.decision_note || r.decider?.full_name) && (
+                <div className="flex flex-wrap items-center gap-1">
+                  <Badge tone={statusTone[r.status]} dot>{STATUS_LABEL[r.status]}</Badge>
+                  {r.auto_approved && r.status === 'approved' && <Badge tone="muted">Auto</Badge>}
+                  {r.is_extra && r.status === 'pending' && <Badge tone="brand">Extra days</Badge>}
+                </div>
+                {!r.auto_approved && (r.decision_note || r.decider?.full_name) && (
                   <p className="mt-1 max-w-[220px] text-xs text-ink-500">
                     {r.decider?.full_name && <>by {r.decider.full_name}</>}
                     {r.decider?.full_name && r.decision_note && ' · '}

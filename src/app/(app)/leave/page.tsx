@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { BalanceCards } from '@/components/BalanceCards';
 import { RequestsTable } from '@/components/RequestsTable';
 import { ApplyForm } from './ApplyForm';
-import { CancelButton } from './CancelButton';
+import { CancelButton } from '@/components/CancelButton';
 
 export const metadata = { title: 'My leave' };
 
@@ -39,14 +39,11 @@ export default async function MyLeavePage() {
 
   const overview = ov as LeaveOverview | null;
   const requests = (reqs ?? []) as unknown as LeaveRequest[];
-  const avail = (bal: number, pend: number) => Math.max(0, Number(bal) - Number(pend));
   const options = overview
     ? [
-        { value: 'casual' as const, label: 'Casual Leave', available: avail(overview.casual, overview.pending_casual) },
-        { value: 'earned' as const, label: 'Earned Leave', available: avail(overview.earned, overview.pending_earned) },
-        ...(overview.category === 'permanent_wfh'
-          ? []
-          : [{ value: 'wfh' as const, label: 'WFH', available: avail(overview.wfh, overview.pending_wfh) }]),
+        { value: 'casual' as const, label: 'Casual Leave', available: Number(overview.casual) },
+        { value: 'earned' as const, label: 'Earned Leave', available: Number(overview.earned) },
+        ...(overview.category === 'permanent_wfh' ? [] : [{ value: 'wfh' as const, label: 'WFH', available: Number(overview.wfh) }]),
       ]
     : [];
 
@@ -57,7 +54,7 @@ export default async function MyLeavePage() {
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-5">
         <Card className="overflow-hidden lg:sticky lg:top-6 lg:col-span-2">
-          <CardHeader title="New request" description="Weekends and holidays aren’t counted." />
+          <CardHeader title="New request" description="Within balance → approved instantly. More than balance → goes to Superadmin." />
           <div className="p-5">
             {emp.status === 'active' ? (
               <ApplyForm
@@ -72,12 +69,15 @@ export default async function MyLeavePage() {
           </div>
         </Card>
         <Card className="overflow-hidden lg:col-span-3">
-          <CardHeader title="My requests" description="Only pending requests can be cancelled." />
+          <CardHeader title="My requests" description="You can cancel pending requests, or approved leave that hasn’t started." />
           <RequestsTable
             rows={requests}
             empty="No requests yet"
             emptyDescription="Your leave and WFH requests will appear here."
-            action={(r) => (r.status === 'pending' ? <CancelButton id={r.id} /> : null)}
+            action={(r) =>
+              r.status === 'pending' ? <CancelButton id={r.id} />
+              : r.status === 'approved' && r.start_date > today ? <CancelButton id={r.id} approved />
+              : null}
           />
         </Card>
       </div>

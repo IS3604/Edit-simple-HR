@@ -104,3 +104,12 @@ Every step is `INSERT … ON CONFLICT DO NOTHING` on the unique indexes; the bal
 - Role escalation blocked: role only from `app_metadata` on sign-up; only Superadmin can update profiles; last active Superadmin can't be removed; no self-demotion/deactivation.
 - Service-role key server-only; security headers (HSTS, frame-deny, nosniff) set in `next.config.mjs`.
 - Known limits (by design, see §5): no half-days, approved leave can't be cancelled (use a grant to correct), WFH requests only for the current month.
+
+## 8. v3 changes (owner request, 16 Nov 2026)
+
+- **Auto-approval:** a request within the available balance is approved and deducted instantly.
+- **Extra-day requests:** beyond balance, the employee must "Raise a request" with a reason; only a **Superadmin** decides. On approval, available balance is used first and the remainder is recorded as `extra_days` on the request (beyond balance). Admins can view but not decide.
+- **Half-day** leave/WFH (first or second half, 0.5 day). Two halves on the same date can't both be booked.
+- **Cancel approved leave** that hasn't started (employee for own, Superadmin for anyone) → deducted days refunded via an `adjustment` ledger line (one per request). Extra days are not "refunded".
+- **Team calendar** (staff only; employees still see only their own data).
+- **Email alerts** via Resend (optional env vars).
