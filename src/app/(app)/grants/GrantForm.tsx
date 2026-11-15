@@ -3,10 +3,12 @@
 import { useActionState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { FormMessage } from '@/components/ui/FormMessage';
+import { useActionToast } from '@/components/ui/Toaster';
 import { grantSpecial } from './actions';
 
 export function GrantForm({ employees }: { employees: { id: string; label: string }[] }) {
   const [state, action, pending] = useActionState(grantSpecial, undefined);
+  useActionToast(state);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state?.success) ref.current?.reset(); }, [state]);
 
@@ -38,7 +40,7 @@ export function GrantForm({ employees }: { employees: { id: string; label: strin
         <textarea id="reason" name="reason" rows={2} maxLength={500} required className="input" placeholder="e.g. Marriage leave, compensatory off" />
       </div>
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={pending}>{pending ? 'Granting…' : 'Grant'}</Button>
+        <Button type="submit" loading={pending}>Grant</Button>
         <FormMessage state={state} />
       </div>
     </form>

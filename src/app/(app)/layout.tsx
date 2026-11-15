@@ -1,15 +1,26 @@
-import { requireProfile } from '@/lib/auth';
-import { NAV_ITEMS } from '@/lib/nav';
+import { isStaff, requireProfile } from '@/lib/auth';
+import { navFor } from '@/lib/nav';
+import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/Sidebar';
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const profile = await requireProfile();
-  const items = NAV_ITEMS.filter((i) => i.roles.includes(profile.role));
+  const me = await requireProfile();
+
+  let pendingCount = 0;
+  if (isStaff(me.role)) {
+    const supabase = await createClient();
+    const { count } = await supabase.from('leave_requests').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+    pendingCount = count ?? 0;
+  }
 
   return (
     <div className="min-h-screen lg:flex">
-      <Sidebar items={items} profile={profile} />
-      <main className="flex-1 px-4 py-6 sm:px-8 lg:py-10">
+      <Sidebar
+        groups={navFor(me.role)}
+        user={{ name: me.full_name || me.email, email: me.email, role: me.role }}
+        pendingCount={pendingCount}
+      />
+      <main className="min-w-0 flex-1 px-4 pb-16 pt-6 sm:px-6 lg:px-10 lg:pt-10">
         <div className="mx-auto max-w-6xl">{children}</div>
       </main>
     </div>

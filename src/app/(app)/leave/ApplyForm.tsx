@@ -3,6 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { FormMessage } from '@/components/ui/FormMessage';
+import { useActionToast } from '@/components/ui/Toaster';
 import { countWorkingDays } from '@/lib/leave-utils';
 import { days as fmtDays } from '@/lib/format';
 import type { LeaveType } from '@/lib/types';
@@ -27,6 +28,7 @@ export function ApplyForm({
   const [end, setEnd] = useState('');
   const formRef = useRef<HTMLFormElement>(null);
   const holidaySet = useMemo(() => new Set(holidays), [holidays]);
+  useActionToast(state);
 
   useEffect(() => {
     if (state?.success) {
@@ -52,14 +54,14 @@ export function ApplyForm({
 
   return (
     <form ref={formRef} action={action} className="space-y-4">
-      <div>
-        <span className="label">Type</span>
-        <div className="flex flex-wrap gap-2">
+      <fieldset>
+        <legend className="label">Type</legend>
+        <div className="grid gap-2 sm:grid-cols-3">
           {options.map((o) => (
             <label
               key={o.value}
-              className={`cursor-pointer rounded-lg border px-3 py-2 text-sm transition-colors ${
-                type === o.value ? 'border-brand bg-brand-50 text-brand-700' : 'border-line bg-white text-ink-600 hover:bg-canvas'
+              className={`flex cursor-pointer flex-col rounded-lg border px-3 py-2.5 transition-colors has-[:focus-visible]:ring-[3px] has-[:focus-visible]:ring-brand/20 ${
+                type === o.value ? 'border-brand bg-brand-50/60 ring-1 ring-brand' : 'border-line bg-white hover:border-ink-300'
               }`}
             >
               <input
@@ -70,11 +72,12 @@ export function ApplyForm({
                 onChange={() => setType(o.value)}
                 className="sr-only"
               />
-              {o.label} <span className="text-xs opacity-70">({fmtDays(o.available)} left)</span>
+              <span className={`text-sm font-medium ${type === o.value ? 'text-brand-700' : 'text-ink'}`}>{o.label}</span>
+              <span className="text-xs text-ink-500">{fmtDays(o.available)} available</span>
             </label>
           ))}
         </div>
-      </div>
+      </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
@@ -93,23 +96,21 @@ export function ApplyForm({
 
       <div>
         <label htmlFor="reason" className="label">Reason <span className="font-normal text-ink-400">(optional)</span></label>
-        <textarea id="reason" name="reason" rows={2} maxLength={500} className="input" />
+        <textarea id="reason" name="reason" rows={2} maxLength={500} className="input" placeholder="Add a note for your approver" />
       </div>
 
-      {start && (
-        <p className={`text-sm ${over || count === 0 ? 'text-red-600' : 'text-ink-600'}`}>
-          {count === 0
-            ? 'No working days in this range.'
-            : `${count} working day${count === 1 ? '' : 's'}${over ? ' — more than your available balance' : ''}`}
-        </p>
-      )}
-
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={pending || !start || count === 0 || over}>
-          {pending ? 'Submitting…' : 'Submit request'}
-        </Button>
-        <FormMessage state={state} />
+      <div className={`rounded-lg px-3 py-2.5 text-[13px] ${!start ? 'bg-stone-50 text-ink-500' : over || count === 0 ? 'bg-red-50 text-red-700' : 'bg-emerald-50 text-emerald-800'}`}>
+        {!start
+          ? 'Pick dates to see how many working days this uses.'
+          : count === 0
+            ? 'No working days in this range (weekends/holidays).'
+            : `${count} working day${count === 1 ? '' : 's'}${over ? ' — more than your available balance' : ` · ${fmtDays((selected?.available ?? 0) - count)} left after approval`}`}
       </div>
+
+      <FormMessage state={state} />
+      <Button type="submit" className="w-full" loading={pending} disabled={!start || count === 0 || over}>
+        {pending ? 'Submitting…' : 'Submit request'}
+      </Button>
     </form>
   );
 }

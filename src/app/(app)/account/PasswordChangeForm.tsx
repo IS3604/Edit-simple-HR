@@ -3,10 +3,12 @@
 import { useActionState, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/Button';
 import { FormMessage } from '@/components/ui/FormMessage';
+import { useActionToast } from '@/components/ui/Toaster';
 import { changePassword } from './actions';
 
 export function PasswordChangeForm() {
   const [state, action, pending] = useActionState(changePassword, undefined);
+  useActionToast(state);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state?.success) ref.current?.reset(); }, [state]);
 
@@ -22,7 +24,7 @@ export function PasswordChangeForm() {
           <input id={name} name={name} type="password" autoComplete={ac} required className="input" />
         </div>
       ))}
-      <Button type="submit" disabled={pending}>{pending ? 'Updating…' : 'Update password'}</Button>
+      <Button type="submit" loading={pending}>Update password</Button>
       <FormMessage state={state} />
     </form>
   );

@@ -1,11 +1,15 @@
 import Link from 'next/link';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CardHeader } from '@/components/ui/Card';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { formatDate } from '@/lib/format';
 import { todayIST } from '@/lib/leave-utils';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { AddHolidayForm, DeleteHolidayButton, WeekendForm } from './HolidayForms';
+
+export const metadata = { title: 'Holidays' };
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -28,40 +32,51 @@ export default async function HolidaysPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Holidays" description={`Non-working days: ${weekend.map((d) => DAY_NAMES[d]).join(', ') || 'none'}, plus the holidays below.`} />
       <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="overflow-hidden lg:col-span-3">
-          <div className="flex items-center justify-between px-4 pt-4">
-            <h2 className="text-sm font-semibold">{year}</h2>
-            <div className="flex gap-3 text-sm">
-              <Link href={`/holidays?year=${year - 1}`} className="text-ink-500 hover:text-ink">← {year - 1}</Link>
-              <Link href={`/holidays?year=${year + 1}`} className="text-ink-500 hover:text-ink">{year + 1} →</Link>
-            </div>
-          </div>
+        <Card className={`overflow-hidden ${isSuper ? 'lg:col-span-3' : 'lg:col-span-5 lg:max-w-2xl'}`}>
+          <CardHeader
+            title={`${year} holidays`}
+            description={`${(hols ?? []).length} day${(hols ?? []).length === 1 ? '' : 's'}`}
+            action={
+              <div className="flex gap-1">
+                <Link href={`/holidays?year=${year - 1}`} className="grid h-8 w-8 place-items-center rounded-lg border border-line text-ink-500 hover:bg-canvas" aria-label="Previous year"><ChevronLeft className="h-4 w-4" /></Link>
+                <Link href={`/holidays?year=${year + 1}`} className="grid h-8 w-8 place-items-center rounded-lg border border-line text-ink-500 hover:bg-canvas" aria-label="Next year"><ChevronRight className="h-4 w-4" /></Link>
+              </div>
+            }
+          />
           {(hols ?? []).length === 0 ? (
-            <p className="p-6 text-sm text-ink-500">No holidays added for {year}.</p>
+            <EmptyState icon={CalendarDays} title={`No holidays added for ${year}`} />
           ) : (
-            <ul className="mt-2 divide-y divide-line">
-              {(hols ?? []).map((h) => (
-                <li key={h.id} className="flex items-center justify-between gap-4 px-4 py-3 text-sm">
-                  <div>
-                    <p className="font-medium">{h.name}</p>
-                    <p className="text-xs text-ink-500">{formatDate(h.holiday_date)}</p>
+            <ul className="divide-y divide-line">
+              {(hols ?? []).map((h) => {
+                const d = new Date(`${h.holiday_date}T00:00:00Z`);
+                const past = h.holiday_date < todayIST();
+                return (
+                <li key={h.id} className={`flex items-center justify-between gap-4 px-5 py-3 text-sm ${past ? 'opacity-55' : ''}`}>
+                  <div className="flex items-center gap-3">
+                    <div className="grid w-11 shrink-0 overflow-hidden rounded-lg border border-line text-center leading-none">
+                      <span className="bg-brand-50 py-0.5 text-2xs font-semibold uppercase text-brand-700">{d.toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' })}</span>
+                      <span className="py-1.5 text-base font-semibold">{d.getUTCDate()}</span>
+                    </div>
+                    <div>
+                      <p className="font-medium">{h.name}</p>
+                      <p className="text-xs text-ink-500">{d.toLocaleString('en-IN', { weekday: 'long', timeZone: 'UTC' })}</p>
+                    </div>
                   </div>
                   {isSuper && <DeleteHolidayButton id={h.id} />}
                 </li>
-              ))}
+              );})}
             </ul>
           )}
         </Card>
         {isSuper && (
-          <div className="space-y-6 lg:col-span-2">
-            <Card className="p-6">
-              <h2 className="mb-4 text-sm font-semibold">Add holiday</h2>
-              <AddHolidayForm />
+          <div className="space-y-6 lg:sticky lg:top-6 lg:col-span-2">
+            <Card className="overflow-hidden">
+              <CardHeader title="Add holiday" />
+              <div className="p-5"><AddHolidayForm /></div>
             </Card>
-            <Card className="p-6">
-              <h2 className="mb-1 text-sm font-semibold">Weekend days</h2>
-              <p className="mb-4 text-xs text-ink-500">Not counted as leave days. Changes don’t alter already-approved requests.</p>
-              <WeekendForm current={weekend} />
+            <Card className="overflow-hidden">
+              <CardHeader title="Weekend days" description="Not counted as leave. Doesn’t change approved requests." />
+              <div className="p-5"><WeekendForm current={weekend} /></div>
             </Card>
           </div>
         )}

@@ -11,9 +11,9 @@ Internal HR portal for EditSimple — employees, monthly leave allocations (CL /
 
 | Role | Can do |
 |---|---|
-| **Superadmin** | Everything below, plus: add / edit / deactivate employees, set roles, monthly allocations, special grants, holidays & weekend days, reset passwords |
+| **Superadmin** | Everything Admin can, plus: add / edit / deactivate employees, set roles, monthly allocations, special grants, holidays & weekend days, reset passwords |
 | **Admin** | HR overview, view employees / balances / history, approve or reject leave & WFH (not their own), see who is out today |
-| **Employee** | Own balances, apply for CL / EL / WFH, see history, cancel pending requests |
+| **Employee** | Own balances, apply for CL / EL / WFH, see history, cancel pending requests (My leave is employee-only; staff screens are HR-only) |
 
 Leave rules (enforced in the database):
 
@@ -58,6 +58,12 @@ npm run build
 ```
 
 GitHub Actions runs all three on every push / PR (`.github/workflows/ci.yml`).
+
+## Performance
+
+- Identity via `getClaims()` (local JWT verification with Supabase asymmetric keys) and one combined profile+employee query per request.
+- Instant navigation feedback with route-level loading skeletons; prefetched sidebar links.
+- **Set the Vercel Functions region to the same region as your Supabase project** (Vercel → Settings → Functions → Region, e.g. Mumbai `bom1` for Supabase `ap-south-1`). A cross-continent region is the #1 cause of slow pages.
 
 ## Security
 

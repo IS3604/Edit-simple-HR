@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Plus, Users } from 'lucide-react';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { CATEGORIES, CATEGORY_LABEL, EMPLOYEE_COLUMNS, type Employee, type EmployeeCategory } from '@/lib/types';
@@ -6,10 +7,17 @@ import { formatDate } from '@/lib/format';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PersonCell } from '@/components/ui/Avatar';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
+import { buttonClass } from '@/components/ui/Button';
+import { FilterBar } from '@/components/FilterBar';
 
-type Search = { q?: string; category?: string; status?: string };
+export const metadata = { title: 'Employees' };
 
-export default async function EmployeesPage({ searchParams }: { searchParams: Promise<Search> }) {
+const catTone = { office: 'neutral', hybrid: 'info', permanent_wfh: 'brand' } as const;
+
+export default async function EmployeesPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string; status?: string }> }) {
   const me = await requireProfile(['superadmin', 'admin']);
   const sp = await searchParams;
   const q = (sp.q ?? '').trim().slice(0, 60);
@@ -21,78 +29,63 @@ export default async function EmployeesPage({ searchParams }: { searchParams: Pr
   if (status !== 'all') query = query.eq('status', status);
   if (category) query = query.eq('category', category);
   if (q) {
-    // Strip characters that have meaning in PostgREST filter syntax.
     const safe = q.replace(/[%,()*\\:."']/g, ' ').trim();
     if (safe) query = query.or(`full_name.ilike.%${safe}%,email.ilike.%${safe}%,employee_code.ilike.%${safe}%`);
   }
   const { data, error } = await query;
   const employees = (data ?? []) as Employee[];
   const filtered = Boolean(q || category || status !== 'active');
+  const isSuper = me.role === 'superadmin';
 
   return (
     <>
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <PageHeader title="Employees" description={`${employees.length} ${status === 'all' ? '' : status} employee${employees.length === 1 ? '' : 's'}`} />
-        {me.role === 'superadmin' && (
-          <Link href="/employees/new" className="inline-flex items-center rounded-lg bg-brand px-3.5 py-2 text-sm font-medium text-white shadow-soft hover:bg-brand-600">
-            Add employee
-          </Link>
-        )}
-      </div>
+      <PageHeader
+        title="Employees"
+        description={`${employees.length} ${status === 'all' ? 'total' : status}`}
+        actions={isSuper ? <Link href="/employees/new" className={buttonClass('primary')}><Plus className="h-4 w-4" /> Add employee</Link> : undefined}
+      />
 
-      <form className="mb-4 flex flex-wrap gap-2" role="search">
-        <input name="q" defaultValue={q} placeholder="Search name, email or ID" className="input w-full sm:w-64" aria-label="Search" />
-        <select name="category" defaultValue={category} className="input w-auto" aria-label="Category">
-          <option value="">All categories</option>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-        </select>
-        <select name="status" defaultValue={status} className="input w-auto" aria-label="Status">
-          <option value="active">Active</option>
-          <option value="inactive">Inactive</option>
-          <option value="all">All</option>
-        </select>
-        <button type="submit" className="rounded-lg border border-line bg-white px-3.5 py-2 text-sm font-medium hover:bg-canvas">Filter</button>
-        {filtered && <Link href="/employees" className="self-center px-2 text-sm text-ink-500 hover:text-ink">Clear</Link>}
-      </form>
+      <FilterBar
+        q={q}
+        placeholder="Search name, email or ID"
+        clearHref="/employees"
+        active={filtered}
+        selects={[
+          { name: 'category', value: category, label: 'Category', options: [{ value: '', label: 'All categories' }, ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))] },
+          { name: 'status', value: status, label: 'Status', options: [{ value: 'active', label: 'Active' }, { value: 'inactive', label: 'Inactive' }, { value: 'all', label: 'All statuses' }] },
+        ]}
+      />
 
-      <Card className="overflow-x-auto">
+      <Card className="overflow-hidden">
         {error ? (
           <p className="p-6 text-sm text-red-600">Could not load employees. Refresh to try again.</p>
         ) : employees.length === 0 ? (
-          <p className="p-6 text-sm text-ink-500">{filtered ? 'No employees match these filters.' : 'No employees yet.'}</p>
+          <EmptyState icon={Users} title={filtered ? 'No matches' : 'No employees yet'}
+            description={filtered ? 'Try a different search or filter.' : 'Add your first employee to get started.'}
+            action={!filtered && isSuper ? <Link href="/employees/new" className={buttonClass('primary', 'sm')}>Add employee</Link> : undefined} />
         ) : (
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Employee</th>
-                <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">Department</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Joined</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {employees.map((e) => (
-                <tr key={e.id} className="hover:bg-canvas/60">
-                  <td className="px-4 py-3">
-                    <Link href={`/employees/${e.id}`} className="font-medium hover:text-brand-700">{e.full_name}</Link>
-                    <p className="text-xs text-ink-500">{e.email}</p>
-                  </td>
-                  <td className="px-4 py-3 font-mono text-xs">{e.employee_code}</td>
-                  <td className="px-4 py-3">
-                    <p>{e.department || '—'}</p>
-                    <p className="text-xs text-ink-500">{e.designation}</p>
-                  </td>
-                  <td className="px-4 py-3"><Badge>{CATEGORY_LABEL[e.category]}</Badge></td>
-                  <td className="px-4 py-3 text-ink-600">{formatDate(e.joining_date)}</td>
-                  <td className="px-4 py-3">
-                    <Badge tone={e.status === 'active' ? 'success' : 'muted'}>{e.status === 'active' ? 'Active' : 'Inactive'}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <TableScroll>
+            <Table minWidth={760}>
+              <thead>
+                <tr><Th>Employee</Th><Th>ID</Th><Th>Department</Th><Th>Category</Th><Th>Joined</Th><Th>Status</Th></tr>
+              </thead>
+              <tbody>
+                {employees.map((e) => (
+                  <Tr key={e.id}>
+                    <Td><PersonCell name={e.full_name} sub={e.email} href={`/employees/${e.id}`} /></Td>
+                    <Td><span className="font-mono text-xs text-ink-600">{e.employee_code}</span></Td>
+                    <Td>
+                      <p className="text-ink-700">{e.department || '—'}</p>
+                      {e.designation && <p className="text-xs text-ink-500">{e.designation}</p>}
+                    </Td>
+                    <Td><Badge tone={catTone[e.category]}>{CATEGORY_LABEL[e.category]}</Badge></Td>
+                    <Td className="whitespace-nowrap text-ink-600">{formatDate(e.joining_date)}</Td>
+                    <Td><Badge tone={e.status === 'active' ? 'success' : 'muted'} dot>{e.status === 'active' ? 'Active' : 'Inactive'}</Badge></Td>
+                  </Tr>
+                ))}
+              </tbody>
+            </Table>
+          </TableScroll>
         )}
       </Card>
     </>

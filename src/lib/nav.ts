@@ -1,18 +1,38 @@
 import type { Role } from '@/lib/types';
 
-export type NavItem = { href: string; label: string; roles: Role[] };
+export type NavIcon =
+  | 'dashboard' | 'leave' | 'requests' | 'employees' | 'balances' | 'grants' | 'holidays' | 'users' | 'account';
+export type NavItem = { href: string; label: string; icon: NavIcon; roles: Role[] };
+export type NavGroup = { label?: string; items: NavItem[] };
 
-const ALL: Role[] = ['superadmin', 'admin', 'employee'];
 const STAFF: Role[] = ['superadmin', 'admin'];
+const ALL: Role[] = ['superadmin', 'admin', 'employee'];
 
-export const NAV_ITEMS: NavItem[] = [
-  { href: '/', label: 'Dashboard', roles: ALL },
-  { href: '/leave', label: 'My leave', roles: ALL },
-  { href: '/requests', label: 'Requests', roles: STAFF },
-  { href: '/employees', label: 'Employees', roles: STAFF },
-  { href: '/balances', label: 'Leave balances', roles: STAFF },
-  { href: '/grants', label: 'Special grants', roles: ['superadmin'] },
-  { href: '/holidays', label: 'Holidays', roles: ALL },
-  { href: '/users', label: 'Users & roles', roles: ['superadmin'] },
-  { href: '/account', label: 'My account', roles: ALL },
+export const NAV: NavGroup[] = [
+  {
+    items: [
+      { href: '/', label: 'Dashboard', icon: 'dashboard', roles: ALL },
+      { href: '/leave', label: 'My leave', icon: 'leave', roles: ['employee'] },
+    ],
+  },
+  {
+    label: 'Manage',
+    items: [
+      { href: '/requests', label: 'Requests', icon: 'requests', roles: STAFF },
+      { href: '/employees', label: 'Employees', icon: 'employees', roles: STAFF },
+      { href: '/balances', label: 'Leave balances', icon: 'balances', roles: STAFF },
+      { href: '/grants', label: 'Special grants', icon: 'grants', roles: ['superadmin'] },
+    ],
+  },
+  {
+    label: 'Company',
+    items: [
+      { href: '/holidays', label: 'Holidays', icon: 'holidays', roles: ALL },
+      { href: '/users', label: 'Users & roles', icon: 'users', roles: ['superadmin'] },
+    ],
+  },
 ];
+
+export function navFor(role: Role): NavGroup[] {
+  return NAV.map((g) => ({ ...g, items: g.items.filter((i) => i.roles.includes(role)) })).filter((g) => g.items.length);
+}

@@ -19,11 +19,12 @@ export async function middleware(request: NextRequest) {
     },
   );
 
-  // Refreshes the session cookie if needed.
-  const { data: { user } } = await supabase.auth.getUser();
+  // Refreshes the session when needed; verifies the JWT (locally with asymmetric keys).
+  const { data } = await supabase.auth.getClaims();
+  const signedIn = Boolean(data?.claims?.sub);
   const isLogin = request.nextUrl.pathname.startsWith('/login');
 
-  if (!user && !isLogin) {
+  if (!signedIn && !isLogin) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     url.search = '';
@@ -33,5 +34,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|logo.*\\.png).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|svg|ico|webp)$).*)'],
 };

@@ -1,11 +1,16 @@
-import Link from 'next/link';
+import { Gift } from 'lucide-react';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { LEAVE_SHORT, type LeaveType } from '@/lib/types';
 import { days, formatDate } from '@/lib/format';
-import { Card } from '@/components/ui/Card';
+import { Card, CardHeader } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PersonCell } from '@/components/ui/Avatar';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
 import { GrantForm } from './GrantForm';
+
+export const metadata = { title: 'Special grants' };
 
 type GrantRow = {
   id: string; leave_type: LeaveType; days: number; reason: string; granted_on: string;
@@ -26,44 +31,37 @@ export default async function GrantsPage() {
 
   return (
     <>
-      <PageHeader title="Special grants" description="Extra leave or WFH outside the monthly allocation. Recorded separately for tracking." />
-      <div className="grid gap-6 lg:grid-cols-5">
-        <Card className="p-6 lg:col-span-2">
-          <h2 className="mb-4 text-sm font-semibold">New grant</h2>
-          <GrantForm employees={(emps ?? []).map((e) => ({ id: e.id, label: `${e.full_name} (${e.employee_code})` }))} />
-          <p className="mt-4 text-xs text-ink-400">EL grants may take the balance above 20 days. WFH grants expire at month end.</p>
+      <PageHeader title="Special grants" description="Extra leave or WFH outside the monthly allocation, tracked separately." />
+      <div className="grid items-start gap-6 lg:grid-cols-5">
+        <Card className="overflow-hidden lg:sticky lg:top-6 lg:col-span-2">
+          <CardHeader title="New grant" description="Added to the balance immediately" />
+          <div className="p-5">
+            <GrantForm employees={(emps ?? []).map((e) => ({ id: e.id, label: `${e.full_name} (${e.employee_code})` }))} />
+            <p className="mt-4 text-xs leading-relaxed text-ink-500">EL grants may take the balance above 20 days. WFH grants expire at month end.</p>
+          </div>
         </Card>
-        <Card className="overflow-x-auto lg:col-span-3">
-          <h2 className="px-4 pt-4 text-sm font-semibold">History</h2>
+        <Card className="overflow-hidden lg:col-span-3">
+          <CardHeader title="History" />
           {error ? (
             <p className="p-6 text-sm text-red-600">Could not load grants.</p>
           ) : rows.length === 0 ? (
-            <p className="p-6 text-sm text-ink-500">No special grants yet.</p>
+            <EmptyState icon={Gift} title="No special grants yet" />
           ) : (
-            <table className="w-full min-w-[560px] text-sm">
-              <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-400">
-                <tr>
-                  <th className="px-4 py-3 font-medium">Date</th>
-                  <th className="px-4 py-3 font-medium">Employee</th>
-                  <th className="px-4 py-3 font-medium">Grant</th>
-                  <th className="px-4 py-3 font-medium">Reason</th>
-                  <th className="px-4 py-3 font-medium">By</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-line">
-                {rows.map((g) => (
-                  <tr key={g.id} className="align-top">
-                    <td className="whitespace-nowrap px-4 py-3 text-ink-600">{formatDate(g.granted_on)}</td>
-                    <td className="px-4 py-3">
-                      {g.employee ? <Link href={`/employees/${g.employee.id}`} className="font-medium hover:text-brand-700">{g.employee.full_name}</Link> : '—'}
-                    </td>
-                    <td className="whitespace-nowrap px-4 py-3 font-medium text-emerald-700">+{days(g.days)} {LEAVE_SHORT[g.leave_type]}</td>
-                    <td className="px-4 py-3 text-ink-600">{g.reason}</td>
-                    <td className="px-4 py-3 text-ink-500">{g.granter?.full_name || g.granter?.email || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <TableScroll>
+              <Table minWidth={600}>
+                <thead><tr><Th>Employee</Th><Th>Grant</Th><Th>Reason</Th><Th>By</Th></tr></thead>
+                <tbody>
+                  {rows.map((g) => (
+                    <Tr key={g.id}>
+                      <Td>{g.employee ? <PersonCell name={g.employee.full_name} sub={formatDate(g.granted_on)} href={`/employees/${g.employee.id}`} /> : '—'}</Td>
+                      <Td className="whitespace-nowrap font-medium text-emerald-700">+{days(g.days)} {LEAVE_SHORT[g.leave_type]}</Td>
+                      <Td className="text-ink-600">{g.reason}</Td>
+                      <Td className="text-ink-500">{g.granter?.full_name || g.granter?.email || '—'}</Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </Table>
+            </TableScroll>
           )}
         </Card>
       </div>

@@ -3,11 +3,13 @@
 import { useActionState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { FormMessage } from '@/components/ui/FormMessage';
+import { useActionToast } from '@/components/ui/Toaster';
 import { saveAllocation } from '../actions';
 import type { LeaveOverview } from '@/lib/types';
 
 export function AllocationForm({ row }: { row: LeaveOverview }) {
   const [state, action, pending] = useActionState(saveAllocation, undefined);
+  useActionToast(state);
   const permanentWfh = row.category === 'permanent_wfh';
 
   const fields = [
@@ -38,12 +40,12 @@ export function AllocationForm({ row }: { row: LeaveOverview }) {
           </div>
         ))}
       </div>
-      <p className="text-xs text-ink-500">
+      <p className="text-xs leading-relaxed text-ink-500">
         {permanentWfh ? 'Permanent WFH employees don’t use WFH days. ' : ''}
         The first save credits the current month; later changes apply from the next 1st.
       </p>
       <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" variant="secondary" disabled={pending}>{pending ? 'Saving…' : 'Save allocation'}</Button>
+        <Button type="submit" variant="secondary" loading={pending}>Save allocation</Button>
         <FormMessage state={state} />
       </div>
     </form>

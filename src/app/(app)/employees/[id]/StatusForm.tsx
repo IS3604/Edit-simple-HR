@@ -3,15 +3,17 @@
 import { useActionState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { FormMessage } from '@/components/ui/FormMessage';
+import { useActionToast } from '@/components/ui/Toaster';
 import { setEmployeeStatus } from '../actions';
 import type { EmployeeStatus } from '@/lib/types';
 
 export function StatusForm({ id, status, isSelf }: { id: string; status: EmployeeStatus; isSelf: boolean }) {
   const [state, action, pending] = useActionState(setEmployeeStatus, undefined);
+  useActionToast(state);
   const deactivate = status === 'active';
 
   if (isSelf && deactivate) {
-    return <p className="text-sm text-ink-500">You can’t deactivate your own account.</p>;
+    return <p className="text-[13px] text-ink-500">You can’t deactivate your own account.</p>;
   }
 
   return (
@@ -26,13 +28,13 @@ export function StatusForm({ id, status, isSelf }: { id: string; status: Employe
     >
       <input type="hidden" name="id" value={id} />
       <input type="hidden" name="status" value={deactivate ? 'inactive' : 'active'} />
-      <p className="text-sm text-ink-600">
+      <p className="text-[13px] text-ink-500">
         {deactivate
           ? 'Blocks sign-in, stops monthly credits and cancels pending requests. History is kept.'
           : 'Restores sign-in. Monthly credits resume from the next month.'}
       </p>
-      <Button type="submit" variant="secondary" disabled={pending} className={deactivate ? 'text-red-600' : ''}>
-        {pending ? 'Saving…' : deactivate ? 'Deactivate employee' : 'Reactivate employee'}
+      <Button type="submit" variant={deactivate ? 'danger' : 'secondary'} loading={pending}>
+        {deactivate ? 'Deactivate employee' : 'Reactivate employee'}
       </Button>
       <FormMessage state={state} />
     </form>

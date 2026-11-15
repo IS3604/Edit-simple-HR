@@ -1,10 +1,36 @@
-export function StatCard({ label, value, href }: { label: string; value: number | string; href?: string }) {
+import Link from 'next/link';
+import type { LucideIcon } from 'lucide-react';
+
+export function StatCard({
+  label,
+  value,
+  href,
+  icon: Icon,
+  accent = false,
+}: {
+  label: string;
+  value: number | string;
+  href?: string;
+  icon?: LucideIcon;
+  accent?: boolean;
+}) {
   const body = (
     <>
-      <p className="text-xs font-medium text-ink-500">{label}</p>
-      <p className="mt-1.5 text-2xl font-semibold tabular-nums tracking-tight">{value}</p>
+      <div className="flex items-center justify-between">
+        <p className="text-[13px] font-medium text-ink-500">{label}</p>
+        {Icon && (
+          <span className={`grid h-7 w-7 place-items-center rounded-md ${accent ? 'bg-brand-50 text-brand-700' : 'bg-stone-100 text-ink-500'}`}>
+            <Icon className="h-3.5 w-3.5" aria-hidden />
+          </span>
+        )}
+      </div>
+      <p className="mt-3 text-[26px] font-semibold leading-none tracking-tight tabular-nums">{value}</p>
     </>
   );
-  const cls = 'block rounded-xl border border-line bg-white p-4 shadow-soft';
-  return href ? <a href={href} className={`${cls} hover:border-brand-100`}>{body}</a> : <div className={cls}>{body}</div>;
+  const cls = 'block rounded-xl border border-line bg-white p-4 shadow-soft transition-colors';
+  return href ? (
+    <Link href={href} className={`${cls} hover:border-ink-300`}>{body}</Link>
+  ) : (
+    <div className={cls}>{body}</div>
+  );
 }

@@ -1,56 +1,47 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useState } from 'react';
 import { updateUserAccess } from './actions';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
-import { FormMessage } from '@/components/ui/FormMessage';
-import { ROLES, ROLE_LABEL, type Profile } from '@/lib/types';
+import { PersonCell } from '@/components/ui/Avatar';
+import { Td, Tr } from '@/components/ui/Table';
+import { useActionToast } from '@/components/ui/Toaster';
+import { ROLES, ROLE_LABEL, type Profile, type Role } from '@/lib/types';
 
 export function UserRow({ user, isSelf }: { user: Profile; isSelf: boolean }) {
   const [state, action, pending] = useActionState(updateUserAccess, undefined);
+  useActionToast(state);
+  const [role, setRole] = useState<Role>(user.role);
+  const [active, setActive] = useState(user.is_active);
+  const dirty = role !== user.role || active !== user.is_active;
+  const formId = `user-${user.id}`;
 
   return (
-    <tr className="align-middle">
-      <td className="px-4 py-3">
-        <p className="font-medium">{user.full_name || '—'}{isSelf && <span className="ml-2 text-xs text-ink-400">(you)</span>}</p>
-        <p className="text-xs text-ink-500">{user.email}</p>
-      </td>
-      <td className="px-4 py-3">
-        <Badge tone={user.is_active ? 'success' : 'muted'}>{user.is_active ? 'Active' : 'Inactive'}</Badge>
-      </td>
-      <td className="px-4 py-3" colSpan={2}>
-        <form action={action} className="flex flex-wrap items-center gap-3">
+    <Tr>
+      <Td><PersonCell name={user.full_name || user.email} sub={isSelf ? `${user.email} · you` : user.email} /></Td>
+      <Td>
+        <select form={formId} name="role" value={role} onChange={(e) => setRole(e.target.value as Role)}
+          disabled={isSelf || pending} className="input h-8 w-36 text-[13px]" aria-label={`Role for ${user.email}`}>
+          {ROLES.map((r) => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+        </select>
+      </Td>
+      <Td>
+        <label className="inline-flex cursor-pointer items-center gap-2">
+          <input form={formId} type="checkbox" name="is_active" checked={active} onChange={(e) => setActive(e.target.checked)}
+            disabled={isSelf || pending} className="peer sr-only" />
+          <span className="relative h-5 w-9 rounded-full bg-stone-300 transition-colors after:absolute after:left-0.5 after:top-0.5 after:h-4 after:w-4 after:rounded-full after:bg-white after:shadow after:transition-transform peer-checked:bg-emerald-500 peer-checked:after:translate-x-4 peer-focus-visible:ring-[3px] peer-focus-visible:ring-brand/25 peer-disabled:opacity-50" />
+          <Badge tone={active ? 'success' : 'muted'}>{active ? 'Active' : 'Inactive'}</Badge>
+        </label>
+      </Td>
+      <Td align="right">
+        <form id={formId} action={action}>
           <input type="hidden" name="id" value={user.id} />
-          <select
-            name="role"
-            defaultValue={user.role}
-            disabled={isSelf || pending}
-            className="input w-36 py-1.5"
-            aria-label={`Role for ${user.email}`}
-          >
-            {ROLES.map((r) => (
-              <option key={r} value={r}>{ROLE_LABEL[r]}</option>
-            ))}
-          </select>
-          <label className="flex items-center gap-2 text-sm text-ink-600">
-            <input
-              type="checkbox"
-              name="is_active"
-              defaultChecked={user.is_active}
-              disabled={isSelf || pending}
-              className="h-4 w-4 rounded border-line accent-brand"
-            />
-            Active
-          </label>
           {!isSelf && (
-            <Button type="submit" variant="secondary" disabled={pending} className="py-1.5">
-              {pending ? 'Saving…' : 'Save'}
-            </Button>
+            <Button type="submit" size="sm" variant={dirty ? 'primary' : 'secondary'} disabled={!dirty} loading={pending}>Save</Button>
           )}
-          <FormMessage state={state} />
         </form>
-      </td>
-    </tr>
+      </Td>
+    </Tr>
   );
 }

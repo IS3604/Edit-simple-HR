@@ -1,14 +1,28 @@
-import Link from 'next/link';
+import { Scale } from 'lucide-react';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { CATEGORIES, CATEGORY_LABEL, EL_CAP, type EmployeeCategory, type LeaveOverview } from '@/lib/types';
 import { days } from '@/lib/format';
 import { Card } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { PersonCell } from '@/components/ui/Avatar';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Badge } from '@/components/ui/Badge';
+import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
+import { FilterBar } from '@/components/FilterBar';
 
-type Search = { q?: string; category?: string };
+export const metadata = { title: 'Leave balances' };
 
-export default async function BalancesPage({ searchParams }: { searchParams: Promise<Search> }) {
+function Cell({ value, sub, warn }: { value: string; sub: string; warn?: boolean }) {
+  return (
+    <>
+      <span className="font-medium text-ink">{value}</span>
+      <span className={`block text-xs ${warn ? 'text-amber-700' : 'text-ink-400'}`}>{sub}</span>
+    </>
+  );
+}
+
+export default async function BalancesPage({ searchParams }: { searchParams: Promise<{ q?: string; category?: string }> }) {
   await requireProfile(['superadmin', 'admin']);
   const sp = await searchParams;
   const q = (sp.q ?? '').trim().slice(0, 60);
@@ -26,65 +40,42 @@ export default async function BalancesPage({ searchParams }: { searchParams: Pro
 
   return (
     <>
-      <PageHeader title="Leave balances" description="Current balances for active employees. Pending requests are not yet deducted." />
-
-      <form className="mb-4 flex flex-wrap gap-2" role="search">
-        <input name="q" defaultValue={q} placeholder="Search name or ID" className="input w-full sm:w-64" aria-label="Search" />
-        <select name="category" defaultValue={category} className="input w-auto" aria-label="Category">
-          <option value="">All categories</option>
-          {CATEGORIES.map((c) => <option key={c} value={c}>{CATEGORY_LABEL[c]}</option>)}
-        </select>
-        <button type="submit" className="rounded-lg border border-line bg-white px-3.5 py-2 text-sm font-medium hover:bg-canvas">Filter</button>
-        {(q || category) && <Link href="/balances" className="self-center px-2 text-sm text-ink-500 hover:text-ink">Clear</Link>}
-      </form>
-
-      <Card className="overflow-x-auto">
+      <PageHeader title="Leave balances" description="Current balances for active employees. Pending requests are deducted only on approval." />
+      <FilterBar
+        q={q} placeholder="Search name or ID" clearHref="/balances" active={Boolean(q || category)}
+        selects={[{ name: 'category', value: category, label: 'Category', options: [{ value: '', label: 'All categories' }, ...CATEGORIES.map((c) => ({ value: c, label: CATEGORY_LABEL[c] }))] }]}
+      />
+      <Card className="overflow-hidden">
         {error ? (
           <p className="p-6 text-sm text-red-600">Could not load balances. Refresh to try again.</p>
         ) : rows.length === 0 ? (
-          <p className="p-6 text-sm text-ink-500">No active employees found.</p>
+          <EmptyState icon={Scale} title="No active employees found" />
         ) : (
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-400">
-              <tr>
-                <th className="px-4 py-3 font-medium">Employee</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 text-right font-medium">CL</th>
-                <th className="px-4 py-3 text-right font-medium">EL</th>
-                <th className="px-4 py-3 text-right font-medium">WFH (month)</th>
-                <th className="px-4 py-3 text-right font-medium">Pending</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {rows.map((r) => {
-                const pending = Number(r.pending_casual) + Number(r.pending_earned) + Number(r.pending_wfh);
-                return (
-                  <tr key={r.employee_id} className="hover:bg-canvas/60">
-                    <td className="px-4 py-3">
-                      <Link href={`/employees/${r.employee_id}`} className="font-medium hover:text-brand-700">{r.full_name}</Link>
-                      <p className="font-mono text-xs text-ink-500">{r.employee_code}</p>
-                    </td>
-                    <td className="px-4 py-3 text-ink-600">{CATEGORY_LABEL[r.category]}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {days(r.casual)}<span className="block text-xs text-ink-400">+{days(r.casual_per_month)}/mo</span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {days(r.earned)}
-                      <span className={`block text-xs ${Number(r.earned) >= EL_CAP ? 'text-brand-700' : 'text-ink-400'}`}>
-                        {Number(r.earned) >= EL_CAP ? 'at cap' : `+${days(r.earned_per_month)}/mo`}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {r.category === 'permanent_wfh' ? <span className="text-ink-400">—</span> : (
-                        <>{days(r.wfh)}<span className="block text-xs text-ink-400">of {days(r.wfh_per_month)}</span></>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{pending > 0 ? days(pending) : <span className="text-ink-400">—</span>}</td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+          <TableScroll>
+            <Table minWidth={760}>
+              <thead>
+                <tr><Th>Employee</Th><Th>Category</Th><Th align="right">Casual</Th><Th align="right">Earned</Th><Th align="right">WFH (month)</Th><Th align="right">Pending</Th></tr>
+              </thead>
+              <tbody>
+                {rows.map((r) => {
+                  const pending = Number(r.pending_casual) + Number(r.pending_earned) + Number(r.pending_wfh);
+                  const atCap = Number(r.earned) >= EL_CAP;
+                  return (
+                    <Tr key={r.employee_id}>
+                      <Td><PersonCell name={r.full_name} sub={r.employee_code} href={`/employees/${r.employee_id}`} /></Td>
+                      <Td className="text-ink-600">{CATEGORY_LABEL[r.category]}</Td>
+                      <Td align="right"><Cell value={days(r.casual)} sub={`+${days(r.casual_per_month)}/mo`} /></Td>
+                      <Td align="right"><Cell value={days(r.earned)} sub={atCap ? 'at cap' : `+${days(r.earned_per_month)}/mo`} warn={atCap} /></Td>
+                      <Td align="right">
+                        {r.category === 'permanent_wfh' ? <span className="text-ink-400">—</span> : <Cell value={days(r.wfh)} sub={`of ${days(r.wfh_per_month)}`} />}
+                      </Td>
+                      <Td align="right">{pending > 0 ? <Badge tone="warning">{days(pending)}</Badge> : <span className="text-ink-400">—</span>}</Td>
+                    </Tr>
+                  );
+                })}
+              </tbody>
+            </Table>
+          </TableScroll>
         )}
       </Card>
     </>

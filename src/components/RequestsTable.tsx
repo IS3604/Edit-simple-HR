@@ -1,71 +1,81 @@
-import Link from 'next/link';
+import { Inbox } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { PersonCell } from '@/components/ui/Avatar';
+import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
 import { days, formatDate } from '@/lib/format';
 import { LEAVE_SHORT, STATUS_LABEL, type LeaveRequest, type RequestStatus } from '@/lib/types';
 
-const statusTone: Record<RequestStatus, 'brand' | 'success' | 'muted' | 'neutral'> = {
-  pending: 'brand', approved: 'success', rejected: 'neutral', cancelled: 'muted',
+const statusTone: Record<RequestStatus, 'warning' | 'success' | 'danger' | 'muted'> = {
+  pending: 'warning', approved: 'success', rejected: 'danger', cancelled: 'muted',
 };
+const typeTone = { casual: 'brand', earned: 'info', wfh: 'neutral' } as const;
 
 export function RequestsTable({
   rows,
   showEmployee = false,
   action,
-  empty = 'No requests yet.',
+  actionHeader = '',
+  empty = 'No requests yet',
+  emptyDescription,
 }: {
   rows: LeaveRequest[];
   showEmployee?: boolean;
   action?: (r: LeaveRequest) => React.ReactNode;
+  actionHeader?: string;
   empty?: string;
+  emptyDescription?: string;
 }) {
-  if (rows.length === 0) return <p className="p-6 text-sm text-ink-500">{empty}</p>;
+  if (rows.length === 0) return <EmptyState icon={Inbox} title={empty} description={emptyDescription} />;
   return (
-    <table className="w-full min-w-[720px] text-sm">
-      <thead className="border-b border-line text-left text-xs uppercase tracking-wide text-ink-400">
-        <tr>
-          {showEmployee && <th className="px-4 py-3 font-medium">Employee</th>}
-          <th className="px-4 py-3 font-medium">Type</th>
-          <th className="px-4 py-3 font-medium">Dates</th>
-          <th className="px-4 py-3 text-right font-medium">Days</th>
-          <th className="px-4 py-3 font-medium">Reason</th>
-          <th className="px-4 py-3 font-medium">Status</th>
-          {action && <th className="px-4 py-3 font-medium"><span className="sr-only">Actions</span></th>}
-        </tr>
-      </thead>
-      <tbody className="divide-y divide-line">
-        {rows.map((r) => (
-          <tr key={r.id} className="align-top">
-            {showEmployee && (
-              <td className="px-4 py-3">
-                {r.employee ? (
-                  <Link href={`/employees/${r.employee.id}`} className="font-medium hover:text-brand-700">{r.employee.full_name}</Link>
-                ) : '—'}
-                <p className="font-mono text-xs text-ink-500">{r.employee?.employee_code}</p>
-              </td>
-            )}
-            <td className="px-4 py-3 font-medium">{LEAVE_SHORT[r.leave_type]}</td>
-            <td className="whitespace-nowrap px-4 py-3 text-ink-600">
-              {formatDate(r.start_date)}
-              {r.end_date !== r.start_date && <> – {formatDate(r.end_date)}</>}
-            </td>
-            <td className="px-4 py-3 text-right tabular-nums">{days(r.days)}</td>
-            <td className="max-w-[220px] px-4 py-3 text-ink-600">
-              <span className="line-clamp-2">{r.reason || '—'}</span>
-            </td>
-            <td className="px-4 py-3">
-              <Badge tone={statusTone[r.status]}>{STATUS_LABEL[r.status]}</Badge>
-              {(r.decision_note || r.decider?.full_name) && (
-                <p className="mt-1 max-w-[200px] text-xs text-ink-500">
-                  {r.decider?.full_name && <>by {r.decider.full_name}</>}
-                  {r.decider?.full_name && r.decision_note && ' · '}
-                  {r.decision_note}
-                </p>
-              )}
-            </td>
-            {action && <td className="px-4 py-3">{action(r)}</td>}
+    <TableScroll>
+      <Table minWidth={showEmployee ? 860 : 640}>
+        <thead>
+          <tr>
+            {showEmployee && <Th>Employee</Th>}
+            <Th>Type</Th>
+            <Th>Dates</Th>
+            <Th align="right">Days</Th>
+            <Th>Reason</Th>
+            <Th>Status</Th>
+            {action && <Th align="right">{actionHeader}</Th>}
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <Tr key={r.id}>
+              {showEmployee && (
+                <Td>
+                  {r.employee
+                    ? <PersonCell name={r.employee.full_name} sub={r.employee.employee_code} href={`/employees/${r.employee.id}`} />
+                    : '—'}
+                </Td>
+              )}
+              <Td><Badge tone={typeTone[r.leave_type]}>{LEAVE_SHORT[r.leave_type]}</Badge></Td>
+              <Td className="whitespace-nowrap text-ink-700">
+                {formatDate(r.start_date)}
+                {r.end_date !== r.start_date && <span className="text-ink-400"> → </span>}
+                {r.end_date !== r.start_date && formatDate(r.end_date)}
+              </Td>
+              <Td align="right" className="font-medium">{days(r.days)}</Td>
+              <Td className="max-w-[240px] text-ink-600">
+                <span className="line-clamp-2" title={r.reason || undefined}>{r.reason || <span className="text-ink-400">—</span>}</span>
+              </Td>
+              <Td>
+                <Badge tone={statusTone[r.status]} dot>{STATUS_LABEL[r.status]}</Badge>
+                {(r.decision_note || r.decider?.full_name) && (
+                  <p className="mt-1 max-w-[220px] text-xs text-ink-500">
+                    {r.decider?.full_name && <>by {r.decider.full_name}</>}
+                    {r.decider?.full_name && r.decision_note && ' · '}
+                    {r.decision_note}
+                  </p>
+                )}
+              </Td>
+              {action && <Td align="right">{action(r)}</Td>}
+            </Tr>
+          ))}
+        </tbody>
+      </Table>
+    </TableScroll>
   );
 }

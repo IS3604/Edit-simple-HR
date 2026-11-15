@@ -16,6 +16,11 @@ export type Profile = {
   is_active: boolean;
 };
 
+/** Signed-in user: profile + linked employee record (if any). */
+export type Me = Profile & {
+  employee: { id: string; status: 'active' | 'inactive'; category: 'permanent_wfh' | 'office' | 'hybrid' } | null;
+};
+
 export type ActionState = { error?: string; success?: string } | undefined;
 
 export type EmployeeCategory = 'permanent_wfh' | 'office' | 'hybrid';

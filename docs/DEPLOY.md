@@ -40,7 +40,8 @@ git push -u origin main
    | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon key |
    | `SUPABASE_SERVICE_ROLE_KEY` | service_role key (**server only**) |
 
-3. Deploy. Put the resulting URL into Supabase **Site URL** (step 1.4).
+3. **Settings → Functions → Function Region**: pick the region closest to your Supabase project (Supabase → Project Settings → General shows it). Mumbai `ap-south-1` → Vercel `bom1`.
+4. Deploy. Put the resulting URL into Supabase **Site URL** (step 1.4).
 
 ## 4. First login
 

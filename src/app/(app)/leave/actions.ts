@@ -37,5 +37,5 @@ export async function cancelRequest(_prev: ActionState, fd: FormData): Promise<A
   if (error) return { error: friendlyDbError(error) };
   revalidatePath('/leave');
   revalidatePath('/');
-  return { success: 'Cancelled.' };
+  return { success: 'Request cancelled.' };
 }

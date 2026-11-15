@@ -7,11 +7,13 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { RequestsTable } from '@/components/RequestsTable';
 import { DecideForm } from './DecideForm';
 
+export const metadata = { title: 'Requests' };
+
 const STATUSES: (RequestStatus | 'all')[] = ['pending', 'approved', 'rejected', 'cancelled', 'all'];
 const KINDS = [
-  { value: '', label: 'Leave & WFH' },
-  { value: 'leave', label: 'Leave only' },
-  { value: 'wfh', label: 'WFH only' },
+  { value: '', label: 'All types' },
+  { value: 'leave', label: 'Leave' },
+  { value: 'wfh', label: 'WFH' },
 ];
 
 export default async function RequestsPage({ searchParams }: { searchParams: Promise<{ status?: string; kind?: string }> }) {
@@ -21,8 +23,6 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const kind = sp.kind === 'leave' || sp.kind === 'wfh' ? sp.kind : '';
 
   const supabase = await createClient();
-  const { data: myEmp } = await supabase.from('employees').select('id').eq('profile_id', me.id).maybeSingle();
-
   let query = supabase.from('leave_requests').select(REQUEST_COLUMNS);
   if (status !== 'all') query = query.eq('status', status);
   if (kind === 'wfh') query = query.eq('leave_type', 'wfh');
@@ -34,43 +34,46 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   const rows = (data ?? []) as unknown as LeaveRequest[];
 
   const href = (s: string, k = kind) => `/requests?status=${s}${k ? `&kind=${k}` : ''}`;
+  const myEmployeeId = me.employee?.id;
 
   return (
     <>
-      <PageHeader title="Requests" description="Approve or reject leave and WFH. Balance is deducted on approval." />
+      <PageHeader title="Requests" description="Review leave and WFH applications. Balances are deducted only when you approve." />
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="flex flex-wrap gap-1 rounded-lg border border-line bg-white p-1">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex flex-wrap rounded-lg border border-line bg-white p-0.5 shadow-xs" role="tablist" aria-label="Status">
           {STATUSES.map((s) => (
-            <Link key={s} href={href(s)}
-              className={`rounded-md px-3 py-1.5 text-sm ${status === s ? 'bg-brand-50 font-medium text-brand-700' : 'text-ink-600 hover:bg-canvas'}`}>
+            <Link key={s} href={href(s)} role="tab" aria-selected={status === s}
+              className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${status === s ? 'bg-ink font-medium text-white' : 'text-ink-600 hover:text-ink'}`}>
               {s === 'all' ? 'All' : STATUS_LABEL[s]}
             </Link>
           ))}
         </div>
-        <div className="flex flex-wrap gap-1">
+        <div className="inline-flex rounded-lg border border-line bg-white p-0.5 shadow-xs" aria-label="Type">
           {KINDS.map((k) => (
             <Link key={k.value} href={href(status, k.value)}
-              className={`rounded-md px-3 py-1.5 text-sm ${kind === k.value ? 'font-medium text-ink' : 'text-ink-500 hover:text-ink'}`}>
+              className={`rounded-md px-3 py-1.5 text-[13px] transition-colors ${kind === k.value ? 'bg-stone-100 font-medium text-ink' : 'text-ink-500 hover:text-ink'}`}>
               {k.label}
             </Link>
           ))}
         </div>
       </div>
 
-      <Card className="overflow-x-auto">
+      <Card className="overflow-hidden">
         {error ? (
           <p className="p-6 text-sm text-red-600">Could not load requests. Refresh to try again.</p>
         ) : (
           <RequestsTable
             rows={rows}
             showEmployee
-            empty={status === 'pending' ? 'Nothing waiting for approval.' : 'No requests found.'}
-            action={(r) =>
-              r.status === 'pending' ? (
-                <DecideForm id={r.id} disabledReason={myEmp && r.employee_id === myEmp.id ? 'Your own request — another approver must decide.' : undefined} />
-              ) : null
-            }
+            actionHeader={status === 'pending' ? 'Decision' : ''}
+            empty={status === 'pending' ? 'All caught up' : 'No requests found'}
+            emptyDescription={status === 'pending' ? 'There are no requests waiting for approval.' : undefined}
+            action={status === 'pending' || status === 'all'
+              ? (r) => r.status === 'pending'
+                ? <DecideForm id={r.id} disabledReason={myEmployeeId && r.employee_id === myEmployeeId ? 'Needs another approver' : undefined} />
+                : null
+              : undefined}
           />
         )}
       </Card>

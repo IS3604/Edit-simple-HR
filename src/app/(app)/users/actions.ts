@@ -47,5 +47,5 @@ export async function updateUserAccess(_prev: ActionState, formData: FormData): 
 
   revalidatePath('/users');
   revalidatePath('/employees');
-  return { success: 'Saved' };
+  return { success: 'Access updated.' };
 }

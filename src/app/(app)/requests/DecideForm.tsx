@@ -1,29 +1,54 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useEffect, useRef, useState } from 'react';
+import { Check, X } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { useActionToast } from '@/components/ui/Toaster';
 import { decideRequest } from './actions';
-import { FormMessage } from '@/components/ui/FormMessage';
 
+/**
+ * Approve = one click. Reject = asks for an optional note.
+ * Each decision is its own <form> with a hidden "decision" field, so the value
+ * never depends on which submit button the browser reports.
+ */
 export function DecideForm({ id, disabledReason }: { id: string; disabledReason?: string }) {
   const [state, action, pending] = useActionState(decideRequest, undefined);
-  if (disabledReason) return <p className="text-xs text-ink-400">{disabledReason}</p>;
-  if (state?.success) return <FormMessage state={state} />;
+  const [rejecting, setRejecting] = useState(false);
+  const noteRef = useRef<HTMLInputElement>(null);
+  useActionToast(state);
+  useEffect(() => { if (rejecting) noteRef.current?.focus(); }, [rejecting]);
+
+  if (disabledReason) return <span className="text-xs text-ink-400">{disabledReason}</span>;
+  if (state?.success) return <Badge tone={state.success === 'Approved' ? 'success' : 'danger'}>{state.success}</Badge>;
+
+  if (rejecting) {
+    return (
+      <form action={action} className="ml-auto flex w-full max-w-[280px] items-center gap-1.5">
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="decision" value="reject" />
+        <input ref={noteRef} name="note" maxLength={500} placeholder="Reason (optional)" aria-label="Rejection note"
+          className="input h-8 min-w-0 flex-1 text-[13px]" />
+        <Button type="submit" size="sm" variant="danger" loading={pending}>Reject</Button>
+        <Button type="button" size="sm" variant="ghost" onClick={() => setRejecting(false)} disabled={pending} aria-label="Cancel">
+          <X className="h-4 w-4" />
+        </Button>
+      </form>
+    );
+  }
 
   return (
-    <form action={action} className="flex min-w-[220px] flex-col gap-2">
-      <input type="hidden" name="id" value={id} />
-      <input name="note" maxLength={500} placeholder="Note (optional)" className="input py-1.5 text-xs" aria-label="Decision note" />
-      <div className="flex gap-2">
-        <button type="submit" name="decision" value="approve" disabled={pending}
-          className="rounded-lg bg-brand px-3 py-1.5 text-xs font-medium text-white hover:bg-brand-600 disabled:opacity-50">
-          Approve
-        </button>
-        <button type="submit" name="decision" value="reject" disabled={pending}
-          className="rounded-lg border border-line bg-white px-3 py-1.5 text-xs font-medium hover:bg-canvas disabled:opacity-50">
-          Reject
-        </button>
-      </div>
-      <FormMessage state={state} />
-    </form>
+    <div className="flex items-center justify-end gap-1.5">
+      <form action={action}>
+        <input type="hidden" name="id" value={id} />
+        <input type="hidden" name="decision" value="approve" />
+        <Button type="submit" size="sm" variant="success" loading={pending}>
+          {!pending && <Check className="h-3.5 w-3.5" aria-hidden />} Approve
+        </Button>
+      </form>
+      <Button type="button" size="sm" variant="secondary" onClick={() => setRejecting(true)} disabled={pending}>
+        Reject
+      </Button>
+    </div>
   );
 }

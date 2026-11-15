@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useActionState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { FormMessage } from '@/components/ui/FormMessage';
+import { useActionToast } from '@/components/ui/Toaster';
 import { CATEGORIES, CATEGORY_LABEL, ROLES, ROLE_LABEL, type ActionState, type Employee } from '@/lib/types';
 
 type Props = {
@@ -14,6 +15,7 @@ type Props = {
 export function EmployeeForm({ action, employee }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined);
   const isNew = !employee;
+  useActionToast(state);
 
   return (
     <form action={formAction} className="space-y-6">
@@ -27,7 +29,7 @@ export function EmployeeForm({ action, employee }: Props) {
         ) : (
           <div>
             <span className="label">Work email</span>
-            <p className="input bg-canvas text-ink-500">{employee.email}</p>
+            <p className="input flex items-center bg-canvas text-ink-500">{employee.email}</p>
           </div>
         )}
         <Field label="Joining date" name="joining_date" type="date" defaultValue={employee?.joining_date} required />
@@ -55,7 +57,7 @@ export function EmployeeForm({ action, employee }: Props) {
       </div>
 
       {isNew && (
-        <div className="rounded-lg border border-line bg-canvas p-4">
+        <div className="rounded-lg border border-dashed border-line bg-stone-50/60 p-4">
           <Field
             label="Temporary password"
             name="password"
@@ -63,20 +65,20 @@ export function EmployeeForm({ action, employee }: Props) {
             autoComplete="new-password"
             placeholder="At least 10 characters"
           />
-          <p className="mt-2 text-xs text-ink-500">
+          <p className="hint">
             Share it securely; the employee can change it under My account. Leave blank only if this email already has a login.
           </p>
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Button type="submit" disabled={pending}>
-          {pending ? 'Saving…' : isNew ? 'Add employee' : 'Save changes'}
+      <FormMessage state={state} />
+      <div className="flex flex-wrap items-center gap-2 border-t border-line pt-5">
+        <Button type="submit" loading={pending}>
+          {isNew ? 'Add employee' : 'Save changes'}
         </Button>
         {isNew && (
-          <Link href="/employees" className="text-sm text-ink-500 hover:text-ink">Cancel</Link>
+          <Link href="/employees" className="inline-flex h-9 items-center rounded-lg px-3 text-sm text-ink-500 hover:bg-black/[0.04] hover:text-ink">Cancel</Link>
         )}
-        <FormMessage state={state} />
       </div>
     </form>
   );

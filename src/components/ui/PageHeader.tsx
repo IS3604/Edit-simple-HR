@@ -1,8 +1,19 @@
-export function PageHeader({ title, description }: { title: string; description?: string }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+}: {
+  title: string;
+  description?: React.ReactNode;
+  actions?: React.ReactNode;
+}) {
   return (
-    <div className="mb-6">
-      <h1 className="text-xl font-semibold tracking-tight text-ink">{title}</h1>
-      {description && <p className="mt-1 text-sm text-ink-500">{description}</p>}
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+      <div className="min-w-0">
+        <h1 className="text-[22px] font-semibold tracking-tight text-ink">{title}</h1>
+        {description && <p className="mt-1 text-sm text-ink-500">{description}</p>}
+      </div>
+      {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
     </div>
   );
 }
