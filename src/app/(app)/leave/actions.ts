@@ -44,7 +44,7 @@ export async function applyLeave(_prev: ActionState, fd: FormData): Promise<Acti
   return {
     success: result.status === 'approved'
       ? `Approved — ${fmtDays(result.days)} day${Number(result.days) === 1 ? '' : 's'} deducted from your balance.`
-      : 'Request sent to the Superadmin for approval.',
+      : 'Request sent to HR for approval.',
   };
 }
 

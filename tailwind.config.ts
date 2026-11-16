@@ -14,6 +14,7 @@ export default {
       fontFamily: {
         sans: ['"IBM Plex Sans"', 'system-ui', '-apple-system', 'Segoe UI', 'sans-serif'],
         mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        display: ['Fraunces', 'Georgia', 'serif'],
       },
       boxShadow: {
         xs: '0 1px 1px rgba(24,24,27,0.04)',

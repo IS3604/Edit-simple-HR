@@ -32,7 +32,7 @@ src/app/(app)/         dashboard, leave, requests, employees, balances, grants, 
 src/app/login/         sign-in
 src/components/        shared UI (balance cards, tables, forms)
 src/lib/               Supabase clients, auth guard, types, validation
-supabase/migrations/   0001 → 0008 (schema, RLS, balance engine, requests, cron)
+supabase/migrations/   0001 → 0009 (schema, RLS, balance engine, requests, cron)
 supabase/setup_all.sql all migrations in one file for a new project
 tests/                 database tests (PGlite) — RLS, constraints, balance engine
 scripts/               create-superadmin

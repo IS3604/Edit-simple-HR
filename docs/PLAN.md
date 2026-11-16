@@ -113,3 +113,12 @@ Every step is `INSERT … ON CONFLICT DO NOTHING` on the unique indexes; the bal
 - **Cancel approved leave** that hasn't started (employee for own, Superadmin for anyone) → deducted days refunded via an `adjustment` ledger line (one per request). Extra days are not "refunded".
 - **Team calendar** (staff only; employees still see only their own data).
 - **Email alerts** via Resend (optional env vars).
+
+## 9. Negative balances (owner policy, 16 Nov 2026)
+
+- HR-approved days beyond the balance are fully deducted; the balance goes negative ("owed").
+- CL/EL shortfalls are repaid by the next monthly credits; WFH shortfalls are taken off the next month's allocation.
+- 31 Dec: positive CL expires, a negative CL carries into the new year (−2 → +1 on 1 Jan → −1).
+- Floors: CL and EL ≥ −10, WFH ≥ −4. Nothing is auto-approved unless it fits the positive balance.
+- Cancelling an approved request refunds exactly what was deducted.
+- Owner's worked example (1 CL / 1 EL / 4 WFH, Oct 2026 → Jan 2027) is an automated test in `tests/scenarios.test.mjs` (Part 3).

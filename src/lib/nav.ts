@@ -19,7 +19,6 @@ export const NAV: NavGroup[] = [
     label: 'Manage',
     items: [
       { href: '/requests', label: 'Requests', icon: 'requests', roles: STAFF },
-      { href: '/calendar', label: 'Team calendar', icon: 'calendar', roles: STAFF },
       { href: '/employees', label: 'Employees', icon: 'employees', roles: STAFF },
       { href: '/balances', label: 'Leave balances', icon: 'balances', roles: STAFF },
       { href: '/grants', label: 'Special grants', icon: 'grants', roles: ['superadmin'] },
@@ -28,6 +27,7 @@ export const NAV: NavGroup[] = [
   {
     label: 'Company',
     items: [
+      { href: '/calendar', label: 'Team calendar', icon: 'calendar', roles: ALL },
       { href: '/holidays', label: 'Holidays', icon: 'holidays', roles: ALL },
       { href: '/users', label: 'Users & roles', icon: 'users', roles: ['superadmin'] },
     ],

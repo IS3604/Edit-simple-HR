@@ -154,11 +154,11 @@ async function checkInvariants(label) {
       select *, sum(amount) over (partition by employee_id, leave_type order by id) running from leave_transactions) z
     where balance_after <> running limit 5`)).rows;
   if (i2.length) bug(`[${label}] I2 balance_after chain broken`, i2);
-  // I4 approved requests: exactly one debit = days - extra
+  // I4 approved requests: exactly one debit = full days (0010: balances may go negative)
   const i4 = (await sys(`
     select r.id, r.days::float, r.extra_days::float, count(t.id) n, sum(t.amount)::float amt
     from leave_requests r left join leave_transactions t on t.request_id=r.id and t.kind='debit'
-    where r.status='approved' group by r.id having count(t.id) <> 1 or sum(t.amount) <> -(r.days - r.extra_days)`)).rows;
+    where r.status='approved' group by r.id having count(t.id) <> 1 or sum(t.amount) <> -r.days`)).rows;
   if (i4.length) bug(`[${label}] I4 approved request debit mismatch`, i4);
   // I5 at most one debit and one refund per request; refunds only on cancelled
   const i5 = (await sys(`
@@ -170,8 +170,11 @@ async function checkInvariants(label) {
   // I7 monthly EL credit never takes balance above cap
   const i7 = (await sys(`select id, amount::float, balance_after::float from leave_transactions where kind='monthly_credit' and leave_type='earned' and amount > 0 and balance_after > 20`)).rows;
   if (i7.length) bug(`[${label}] I7 EL monthly credit exceeded cap`, i7);
-  // I8 WFH monthly credit always starts from zero (no carry-forward)
-  const i8 = (await sys(`select id, amount::float, balance_after::float from leave_transactions where kind='monthly_credit' and leave_type='wfh' and balance_after <> amount`)).rows;
+  // I8 WFH monthly credit never carries a positive leftover (a shortfall may reduce it)
+  const i8 = (await sys(`select id, amount::float, balance_after::float from leave_transactions where kind='monthly_credit' and leave_type='wfh' and balance_after > amount`)).rows;
+  // I9 floors: CL/EL never below -10, WFH never below -4
+  const i9 = (await sys(`select employee_id from leave_balances where casual < -10 or earned < -10 or wfh < -4`)).rows;
+  if (i9.length) bug(`[${label}] I9 balance below floor`, i9);
   if (i8.length) bug(`[${label}] I8 WFH carried forward`, i8);
   // I10 permanent WFH employees never have WFH requests
   const i10 = (await sys(`select r.id from leave_requests r join employees e on e.id=r.employee_id where e.category='permanent_wfh' and r.leave_type='wfh'`)).rows;
@@ -237,7 +240,8 @@ assert.ok(e);
 await as(SA, `select decide_request($1, true, 'ok')`, [extra1.id]);
 const x1 = (await sys(`select status, extra_days::float from leave_requests where id=$1`, [extra1.id])).rows[0];
 assert.deepEqual([x1.status, x1.extra_days], ['approved', 2]);
-ok('Asha: extra-day request needs reason; Admin/employee cannot decide; Superadmin approves → 2 extra days, balance stays 0');
+assert.equal((await bal(P.asha)).c, -2);
+ok('Asha: extra-day request needs reason; Admin/employee cannot decide; HR approves → balance −2 (owed)');
 
 e = await err(apply(P.zoya, 'wfh', '2026-01-06', '2026-01-06'));
 assert.match(e?.message ?? '', /Permanent WFH/);
@@ -275,9 +279,9 @@ assert.match(e?.message ?? '', /not found/);
 const peek = (await as(P.meera.uid, `select count(*)::int c from leave_requests`)).rows[0].c;
 const peekBal = (await as(P.meera.uid, `select count(*)::int c from leave_balances`)).rows[0].c;
 assert.equal(peek, 0); assert.equal(peekBal, 1);
-e = await err(as(P.meera.uid, `select * from team_calendar('2026-01-01','2026-01-31')`));
-assert.ok(e);
-ok('Meera cannot see or cancel others’ requests, or read the team calendar');
+const mcal = (await as(P.meera.uid, `select * from team_calendar('2026-01-01','2026-01-31')`)).rows;
+assert.ok(mcal.length > 0 && mcal.every((r) => r.employee_id === null && ['leave', 'wfh'].includes(r.leave_type)));
+ok('Meera cannot see or cancel others’ requests; team calendar shows only names + leave/WFH');
 
 // Concurrency: two parallel applications that together exceed balance
 TODAY = '2026-01-13';
@@ -411,6 +415,69 @@ const arjunCredits = (await sys(`select count(*)::int c from leave_transactions 
 if (arjunCredits) bug('deactivated employee kept receiving credits', arjunCredits);
 const ashaJul = (await sys(`select amount::float from leave_transactions where employee_id=$1 and kind='monthly_credit' and leave_type='casual' and period='2026-07-01'`, [P.asha.emp])).rows[0];
 if (ashaJul?.amount !== 1.5) bug('July allocation change not applied from next credit', ashaJul);
+
+
+// =====================================================================
+// Part 3 — the owner's worked example (1 CL, 1 EL, 4 WFH; Oct 2026 → Jan 2027)
+// =====================================================================
+console.log('\nPart 3 — owner example (1/1/4 from 1 Oct 2026)');
+await persona('owner', { name: 'Owner Example', category: 'hybrid', joined: '2026-10-01', alloc: [1, 1, 4] });
+const O = P.owner;
+TODAY = '2026-10-01'; await onboard(O);
+const ob = async () => { const b = await bal(O); return [b.c, b.e, b.w]; };
+assert.deepEqual(await ob(), [1, 1, 4]);
+const approveAll = async () => { for (const q of (await as(SA, `select id from leave_requests where employee_id=$1 and status='pending'`, [O.emp])).rows) await as(SA, `select decide_request($1, true, 'ok')`, [q.id]); };
+
+// October: takes 2 CL, 2 EL, 6 WFH (beyond balance → raised to HR and approved)
+TODAY = '2026-10-05';
+await apply(O, 'casual', '2026-10-06', '2026-10-07', { raise: true, reason: 'Family' });
+await apply(O, 'earned', '2026-10-08', '2026-10-09', { raise: true, reason: 'Trip' });
+await apply(O, 'wfh', '2026-10-12', '2026-10-16', { raise: true, reason: 'Home repairs' });   // 5 days (12–16)
+await apply(O, 'wfh', '2026-10-19', '2026-10-19', { raise: true, reason: 'Home repairs' });   // +1 = 6
+await approveAll();
+assert.deepEqual(await ob(), [-1, -1, -2]);
+ok('Oct: 2 CL / 2 EL / 6 WFH approved by HR → balances −1 / −1 / −2');
+
+TODAY = '2026-11-01'; await sys(`select credit_monthly($1, '2026-11-01')`, [O.emp]);
+assert.deepEqual(await ob(), [0, 0, 2]);
+ok('1 Nov: CL 0, EL 0, WFH 4 − 2 = 2  (matches “Ideal”)');
+
+TODAY = '2026-11-02';
+let e3 = await err(apply(O, 'casual', '2026-11-03', '2026-11-04'));
+assert.match(e3?.message ?? '', /Raise a request to HR/);
+await apply(O, 'casual', '2026-11-03', '2026-11-04', { raise: true, reason: 'Wedding' });
+await apply(O, 'wfh', '2026-11-16', '2026-11-19', { raise: true, reason: 'Internet install' }); // 4 WFH with 2 left
+await approveAll();
+assert.deepEqual(await ob(), [-2, 0, -2]);
+ok('Nov: takes 2 CL, 4 WFH → −2 CL, −2 WFH (nothing auto-approved while it doesn’t fit)');
+
+TODAY = '2026-12-01'; await sys(`select credit_monthly($1, '2026-12-01')`, [O.emp]);
+assert.deepEqual(await ob(), [-1, 1, 2]);
+ok('1 Dec: CL −1, EL 1, WFH 2');
+
+TODAY = '2026-12-02';
+const w = await apply(O, 'wfh', '2026-12-03', '2026-12-04');
+assert.equal(w.status, 'approved');
+assert.deepEqual(await ob(), [-1, 1, 0]);
+ok('Dec: 2 WFH within balance → auto-approved');
+
+TODAY = '2026-12-31'; await sys(`select expire_casual($1, 2026)`, [O.emp]);
+assert.equal((await bal(O)).c, -1);
+TODAY = '2027-01-01'; await sys(`select credit_monthly($1, '2027-01-01')`, [O.emp]);
+assert.deepEqual(await ob(), [0, 2, 4]);
+ok('31 Dec: CL shortfall −1 carries over; 1 Jan → CL 0, EL 2, WFH 4');
+
+TODAY = '2027-01-04';
+await sys(`update leave_balances set earned = -9 where employee_id=$1`, [O.emp]);
+await sys(`insert into leave_transactions (employee_id, leave_type, kind, amount, balance_after, note) values ($1,'earned','adjustment', -11, -9, 'test: near floor')`, [O.emp]);
+e3 = await err(apply(O, 'earned', '2027-01-05', '2027-01-06', { raise: true, reason: 'x' }));
+assert.match(e3?.message ?? '', /limit of -10/);
+await sys(`update leave_balances set wfh = -3 where employee_id=$1`, [O.emp]);
+await sys(`insert into leave_transactions (employee_id, leave_type, kind, amount, balance_after, note) values ($1,'wfh','adjustment', -7, -3, 'test: near floor')`, [O.emp]);
+e3 = await err(apply(O, 'wfh', '2027-01-07', '2027-01-08', { raise: true, reason: 'x' }));
+assert.match(e3?.message ?? '', /limit of -4/);
+ok('floors: EL/CL cannot go below −10, WFH below −4');
+await checkInvariants('owner-example');
 
 for (const u of unexpected) bug('Unexpected (non-business) error', u);
 

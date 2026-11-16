@@ -5,7 +5,7 @@
 1. Create a project at supabase.com (region: Mumbai `ap-south-1` is closest).
 2. **SQL Editor → New query** → paste all of `supabase/setup_all.sql` → **Run**.
    - Already ran some migrations earlier? Run only the missing files from `supabase/migrations/` in order
-     (e.g. `0004_requests_grants_overview.sql`, `0005_cron.sql`, `0006_auto_approve_halfday_cancel.sql`, `0007_scenario_fixes.sql`, `0008_push_subscriptions.sql`).
+     (e.g. `0004_requests_grants_overview.sql`, `0005_cron.sql`, `0006_auto_approve_halfday_cancel.sql`, `0007_scenario_fixes.sql`, `0008_push_subscriptions.sql`, `0009_grant_edit_revoke.sql`).
    - If `0005` fails with a pg_cron error: **Database → Extensions → enable `pg_cron`**, then run `0005_cron.sql` again.
 3. **Authentication → Sign In / Providers → Email**: keep Email enabled, turn **off "Allow new users to sign up"**. HR creates every account.
 4. **Authentication → URL Configuration → Site URL**: set to your production URL (after step 3 below).

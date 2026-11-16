@@ -139,7 +139,7 @@ async function emailFor(r: RequestInfo, event: NotifyEvent, refunded: number) {
     case 'approved':
       await send(emp, `Approved: ${LEAVE_LABEL[r.leave_type]} on ${dateText(r)}`,
         layout('Your request was approved', [...baseRows(r),
-          ...(Number(r.extra_days) > 0 ? [['Extra days', fmtDays(r.extra_days)] as [string, string]] : []),
+          ...(Number(r.extra_days) > 0 ? [['Beyond balance', `${fmtDays(r.extra_days)} day(s) — deducted, balance went negative`] as [string, string]] : []),
           ...(r.decision_note ? [['Note', r.decision_note] as [string, string]] : [])], { label: 'View my leave', path: '/leave' }));
       break;
     case 'rejected':

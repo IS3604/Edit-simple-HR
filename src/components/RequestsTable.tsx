@@ -60,7 +60,7 @@ export function RequestsTable({
               </Td>
               <Td align="right" className="font-medium">
                 {days(r.days)}
-                {Number(r.extra_days) > 0 && <span className="block text-xs font-normal text-amber-700">{days(r.extra_days)} extra</span>}
+                {Number(r.extra_days) > 0 && <span className="block text-xs font-normal text-amber-700">{days(r.extra_days)} beyond balance</span>}
               </Td>
               <Td className="max-w-[240px] text-ink-600">
                 <span className="line-clamp-2" title={r.reason || undefined}>{r.reason || <span className="text-ink-400">—</span>}</span>

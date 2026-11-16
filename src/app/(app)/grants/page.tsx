@@ -9,11 +9,13 @@ import { PersonCell } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Table, TableScroll, Td, Th, Tr } from '@/components/ui/Table';
 import { GrantForm } from './GrantForm';
+import { GrantActions } from './GrantActions';
+import { Badge } from '@/components/ui/Badge';
 
 export const metadata = { title: 'Special grants' };
 
 type GrantRow = {
-  id: string; leave_type: LeaveType; days: number; reason: string; granted_on: string;
+  id: string; leave_type: LeaveType; days: number; reason: string; granted_on: string; revoked_at: string | null; updated_at: string | null;
   employee: { id: string; full_name: string; employee_code: string } | null;
   granter: { full_name: string; email: string } | null;
 };
@@ -24,7 +26,7 @@ export default async function GrantsPage() {
   const [{ data: emps }, { data: grants, error }] = await Promise.all([
     supabase.from('employees').select('id, full_name, employee_code').eq('status', 'active').order('full_name'),
     supabase.from('special_grants')
-      .select('id, leave_type, days, reason, granted_on, employee:employees(id, full_name, employee_code), granter:profiles!special_grants_granted_by_fkey(full_name, email)')
+      .select('id, leave_type, days, reason, granted_on, revoked_at, updated_at, employee:employees(id, full_name, employee_code), granter:profiles!special_grants_granted_by_fkey(full_name, email)')
       .order('created_at', { ascending: false }).limit(200),
   ]);
   const rows = (grants ?? []) as unknown as GrantRow[];
@@ -48,15 +50,26 @@ export default async function GrantsPage() {
             <EmptyState icon={Gift} title="No special grants yet" />
           ) : (
             <TableScroll>
-              <Table minWidth={600}>
-                <thead><tr><Th>Employee</Th><Th>Grant</Th><Th>Reason</Th><Th>By</Th></tr></thead>
+              <Table minWidth={560}>
+                <thead><tr><Th>Employee</Th><Th>Grant</Th><Th>Reason</Th><Th /></tr></thead>
                 <tbody>
                   {rows.map((g) => (
-                    <Tr key={g.id}>
+                    <Tr key={g.id} className={g.revoked_at ? 'opacity-60' : ''}>
                       <Td>{g.employee ? <PersonCell name={g.employee.full_name} sub={formatDate(g.granted_on)} href={`/employees/${g.employee.id}`} /> : '—'}</Td>
-                      <Td className="whitespace-nowrap font-medium text-emerald-700">+{days(g.days)} {LEAVE_SHORT[g.leave_type]}</Td>
-                      <Td className="text-ink-600">{g.reason}</Td>
-                      <Td className="text-ink-500">{g.granter?.full_name || g.granter?.email || '—'}</Td>
+                      <Td className="whitespace-nowrap">
+                        <span className={`font-medium ${g.revoked_at ? 'text-ink-400 line-through' : 'text-emerald-700'}`}>+{days(g.days)} {LEAVE_SHORT[g.leave_type]}</span>
+                        {g.revoked_at && <span className="ml-2"><Badge tone="muted">Revoked</Badge></span>}
+                        {!g.revoked_at && g.updated_at && <span className="block text-xs text-ink-400">edited</span>}
+                      </Td>
+                      <Td className="text-ink-600">
+                        {g.reason}
+                        <span className="block text-xs text-ink-400">by {g.granter?.full_name || g.granter?.email || '—'}</span>
+                      </Td>
+                      <Td align="right">
+                        {!g.revoked_at && g.employee && (
+                          <GrantActions grant={{ id: g.id, leave_type: g.leave_type, days: g.days, reason: g.reason, employeeName: g.employee.full_name }} />
+                        )}
+                      </Td>
                     </Tr>
                   ))}
                 </tbody>

@@ -245,9 +245,9 @@ assert.match(await msg(as(AD, `select decide_request('${a2.id}', true, '')`)), /
 await as(SA, `select decide_request('${a2.id}', true, 'ok')`);
 const x = (await db.query(`select status, extra_days from leave_requests where id='${a2.id}'`)).rows[0];
 assert.deepEqual([x.status, +x.extra_days], ['approved', 0.5]);
-assert.deepEqual(await bal1(), [0, 4]);
+assert.deepEqual(await bal1(), [-0.5, 4]);
 assert.match(await msg(as(SA, `select decide_request('${a2.id}', true, '')`)), /already approved/);
-ok('superadmin approves extra request: balance used first, remainder recorded as extra days; admins cannot decide');
+ok('HR approves extra request: full day deducted, balance goes to -0.5 (owed); admins cannot decide');
 
 assert.match(await msg(as(E1, `select apply_leave('wfh', '${d1}', '${d1}', '')`)), /overlap/);
 assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d1}', '')`)), /End date/);
@@ -260,19 +260,20 @@ const hDay = (await db.query(`select d::date::text d from generate_series($1::da
 if (hDay) {
   const hw = await apply(E1, `'wfh', '${hDay}', '${hDay}', '', true, 'second'`);
   assert.equal(hw.status, 'approved'); assert.equal(+hw.days, 0.5);
-  assert.deepEqual(await bal1(), [0, 3.5]);
+  assert.deepEqual(await bal1(), [-0.5, 3.5]);
   ok('half-day: 0.5 day, auto-approved');
 
   const c = (await as(E1, `select cancel_request('${hw.id}') j`)).rows[0].j;
-  assert.equal(+c.refunded, 0.5); assert.deepEqual(await bal1(), [0, 4]);
+  assert.equal(+c.refunded, 0.5); assert.deepEqual(await bal1(), [-0.5, 4]);
   assert.match(await msg(as(E1, `select cancel_request('${hw.id}')`)), /already cancelled/);
   ok('cancel approved future leave: refunded once');
 }
 
 const cx = (await as(E1, `select cancel_request('${a2.id}') j`)).rows[0].j;
-assert.equal(+cx.refunded, 0.5);  // 1 day minus 0.5 extra
+assert.equal(+cx.refunded, 1);  // full deducted day comes back
+assert.deepEqual(await bal1(), [0.5, 4]);
 assert.match(await msg(as(E2, `select cancel_request('${r1}')`)), /not found/);
-ok('cancelling an extra-day request refunds only the part taken from balance; others cannot cancel');
+ok('cancelling an HR-approved request refunds exactly what was deducted; others cannot cancel');
 
 const p3 = await apply(E1, `'casual', '${d2}', '${d2}', 'emergency', false, null, true`);
 await as(SA, `select decide_request('${p3.id}', false, 'no')`);
@@ -295,8 +296,10 @@ assert.match(await msg(as(E1, `select hr_overview()`)), /Not allowed/);
 ok('HR overview: staff only');
 const cal = (await as(AD, `select * from team_calendar('${today}'::date, ('${today}'::date + 30))`)).rows;
 assert.ok(Array.isArray(cal));
-assert.match(await msg(as(E1, `select * from team_calendar('${today}'::date, '${today}'::date)`)), /Not allowed/);
-ok('team calendar: staff only, no reasons exposed');
+const ecal = (await as(E1, `select * from team_calendar('${today}'::date, ('${today}'::date + 30))`)).rows;
+assert.ok(ecal.every((r) => r.employee_id === null && ['leave', 'wfh'].includes(r.leave_type)));
+assert.ok(cal.every((r) => ['casual', 'earned', 'wfh'].includes(r.leave_type)));
+ok('team calendar: everyone can see it; employees only get name + leave/WFH (no type, no IDs, no reasons)');
 
 await db.exec(`insert into employees (employee_code, full_name, email, joining_date, category) values ('ES-006','Six','e6@editsimple.com','2024-01-01','office')`);
 const e6 = (await db.query(`select id from employees where employee_code='ES-006'`)).rows[0].id;
@@ -304,5 +307,36 @@ await db.exec(`select run_monthly_accrual()`);
 assert.equal((await db.query(`select count(*)::int c from leave_transactions where employee_id='${e6}'`)).rows[0].c, 0);
 assert.equal((await as(SA, `select set_allocation('${e6}', 1, 1, 2) r`)).rows[0].r, 'credited');
 ok('monthly job skips never-configured allocations, so first save still credits the month');
+
+// ===== 0009: edit / revoke special grants =====
+const elOf = async (id) => +(await db.query(`select earned from leave_balances where employee_id='${id}'`)).rows[0].earned;
+const el0 = await elOf(e6);
+const gid = (await as(SA, `select grant_special('${e6}', 'earned', 3, 'Comp-off') g`)).rows[0].g;
+assert.equal(await elOf(e6), el0 + 3);
+assert.match(await msg(as(AD, `select update_special_grant('${gid}', 5, 'x')`)), /Only a Superadmin/);
+await as(SA, `select update_special_grant('${gid}', 5, 'Comp-off (2 weekends)')`);
+assert.equal(await elOf(e6), el0 + 5);
+const txBefore = (await db.query(`select count(*)::int c from leave_transactions where grant_id='${gid}'`)).rows[0].c;
+await as(SA, `select update_special_grant('${gid}', 5, 'Reason only change')`);
+assert.equal((await db.query(`select count(*)::int c from leave_transactions where grant_id='${gid}'`)).rows[0].c, txBefore);
+await as(SA, `select update_special_grant('${gid}', 1, 'Comp-off')`);
+assert.equal(await elOf(e6), el0 + 1);
+ok('superadmin edits a grant: balance follows the new days; reason-only edit adds no ledger line; admin cannot edit');
+
+await db.exec(`update leave_balances set earned = 0.5 where employee_id='${e6}'`); // employee has used most of it
+assert.match(await msg(as(SA, `select revoke_special_grant('${gid}')`)), /already used/);
+await db.exec(`update leave_balances set earned = 0 where employee_id='${e6}'`);
+assert.match(await msg(as(SA, `select update_special_grant('${gid}', 0.5, 'x')`)), /at most/);
+await db.exec(`update leave_balances set earned = 0.5 where employee_id='${e6}'`);
+await as(SA, `select update_special_grant('${gid}', 0.5, 'Comp-off (half used)')`);
+assert.equal(await elOf(e6), 0);
+await db.exec(`update leave_balances set earned = 3 where employee_id='${e6}'`);
+await as(SA, `select revoke_special_grant('${gid}')`);
+assert.equal(await elOf(e6), 2.5);
+assert.ok((await db.query(`select revoked_at from special_grants where id='${gid}'`)).rows[0].revoked_at);
+assert.match(await msg(as(SA, `select revoke_special_grant('${gid}')`)), /already revoked/);
+assert.match(await msg(as(SA, `select update_special_grant('${gid}', 2, 'x')`)), /revoked/);
+assert.match(await msg(as(AD, `select revoke_special_grant('${gid}')`)), /Only a Superadmin/);
+ok('revoke: blocked if the days were already used; removes the days once; revoked grants cannot be edited');
 
 console.log(`\nAll ${n} checks passed.`);

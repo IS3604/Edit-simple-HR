@@ -28,3 +28,30 @@ export async function grantSpecial(_prev: ActionState, fd: FormData): Promise<Ac
   revalidatePath(`/employees/${employeeId}`);
   return { success: 'Grant recorded and added to the balance.' };
 }
+
+export async function editGrant(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireProfile(['superadmin']);
+  const id = String(fd.get('id') ?? '');
+  const daysNum = Number(fd.get('days'));
+  const reason = String(fd.get('reason') ?? '').trim();
+  if (!id) return { error: 'Missing grant.' };
+  if (!Number.isFinite(daysNum) || daysNum <= 0 || daysNum > 31 || !Number.isInteger(daysNum * 2))
+    return { error: 'Days must be between 0.5 and 31, in steps of 0.5.' };
+  if (!reason) return { error: 'Add a reason for the grant.' };
+
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('update_special_grant', { p_id: id, p_days: daysNum, p_reason: reason });
+  if (error) return { error: friendlyDbError(error) };
+  for (const p of ['/grants', '/balances', '/']) revalidatePath(p);
+  return { success: 'Grant updated.' };
+}
+
+export async function revokeGrant(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  await requireProfile(['superadmin']);
+  const id = String(fd.get('id') ?? '');
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('revoke_special_grant', { p_id: id });
+  if (error) return { error: friendlyDbError(error) };
+  for (const p of ['/grants', '/balances', '/']) revalidatePath(p);
+  return { success: 'Grant revoked and removed from the balance.' };
+}

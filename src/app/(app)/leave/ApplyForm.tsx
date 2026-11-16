@@ -40,7 +40,11 @@ export function ApplyForm({
   const count = half ? (working > 0 ? 0.5 : 0) : working;
   const selected = options.find((o) => o.value === type);
   const available = selected?.available ?? 0;
-  const excess = Math.max(0, count - available);
+  const usable = Math.max(available, 0);
+  const excess = Math.max(0, count - usable);
+  const after = available - count;
+  const floor = type === 'wfh' ? -4 : -10;
+  const overFloor = count > 0 && after < floor;
   const needsRequest = count > 0 && excess > 0;
 
   const isWfh = type === 'wfh';
@@ -59,7 +63,9 @@ export function ApplyForm({
                 type === o.value ? 'border-brand bg-brand-50/60 ring-1 ring-brand' : 'border-line bg-white hover:border-ink-300'}`}>
               <input type="radio" name="leave_type" value={o.value} checked={type === o.value} onChange={() => setType(o.value)} className="sr-only" />
               <span className={`text-sm font-medium ${type === o.value ? 'text-brand-700' : 'text-ink'}`}>{o.label}</span>
-              <span className="text-xs text-ink-500">{fmtDays(o.available)} available</span>
+              <span className={`text-xs ${o.available < 0 ? 'text-red-600' : 'text-ink-500'}`}>
+                {o.available < 0 ? `${fmtDays(o.available)} (owed)` : `${fmtDays(o.available)} available`}
+              </span>
             </label>
           ))}
         </div>
@@ -110,12 +116,23 @@ export function ApplyForm({
         <div className="flex gap-2.5 rounded-lg bg-red-50 px-3.5 py-3 text-[13px] text-red-700">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> No working days in this range (weekends / holidays).
         </div>
+      ) : overFloor ? (
+        <div className="flex gap-2.5 rounded-lg bg-red-50 px-3.5 py-3 text-[13px] text-red-700">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <div>
+            <p className="font-medium">{fmtDays(count)} day{count === 1 ? '' : 's'} is too many</p>
+            <p className="mt-0.5">Your {selected?.label ?? 'balance'} can’t go below {floor}. You can take at most {fmtDays(Math.max(0, available - floor))} day(s) now.</p>
+          </div>
+        </div>
       ) : needsRequest ? (
         <div className="flex gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-[13px] text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
           <div>
             <p className="font-medium">{fmtDays(count)} day{count === 1 ? '' : 's'} · {fmtDays(excess)} more than your balance</p>
-            <p className="mt-0.5 text-amber-800">This needs Superadmin approval. If approved, your {fmtDays(available)} available day{available === 1 ? '' : 's'} are used first.</p>
+            <p className="mt-0.5 text-amber-800">
+              This needs HR approval. If approved, your balance becomes <strong>{fmtDays(after)}</strong>
+              {type === 'wfh' ? ' — the shortfall is taken off next month’s WFH.' : ' — the shortfall is repaid from your next monthly credits.'}
+            </p>
           </div>
         </div>
       ) : (
@@ -130,10 +147,10 @@ export function ApplyForm({
 
       <input type="hidden" name="raise" value={needsRequest ? '1' : '0'} />
       <FormMessage state={state} />
-      <Button type="submit" className="w-full" loading={pending} disabled={!start || count === 0 || (needsRequest && !reason.trim())}
+      <Button type="submit" className="w-full" loading={pending} disabled={!start || count === 0 || overFloor || (needsRequest && !reason.trim())}
         variant={needsRequest ? 'secondary' : 'primary'}>
         {!pending && (needsRequest ? <Send className="h-4 w-4" /> : <Zap className="h-4 w-4" />)}
-        {needsRequest ? 'Raise request to Superadmin' : 'Apply'}
+        {needsRequest ? 'Raise request to HR' : 'Apply'}
       </Button>
     </form>
   );

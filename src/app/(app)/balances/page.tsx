@@ -17,7 +17,7 @@ export const metadata = { title: 'Leave balances' };
 function Cell({ value, sub, warn }: { value: string; sub: string; warn?: boolean }) {
   return (
     <>
-      <span className="font-medium text-ink">{value}</span>
+      <span className={`font-medium ${value.startsWith('-') ? 'text-red-600' : 'text-ink'}`}>{value}</span>
       <span className={`block text-xs ${warn ? 'text-amber-700' : 'text-ink-400'}`}>{sub}</span>
     </>
   );

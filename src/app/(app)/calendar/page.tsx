@@ -9,20 +9,23 @@ import { PageHeader } from '@/components/ui/PageHeader';
 
 export const metadata = { title: 'Team calendar' };
 
-type Entry = { employee_id: string; full_name: string; leave_type: LeaveType; start_date: string; end_date: string; half_day: boolean; half_day_session: string | null };
+type Kind = LeaveType | 'leave';
+type Entry = { employee_id: string | null; full_name: string; leave_type: Kind; start_date: string; end_date: string; half_day: boolean; half_day_session: string | null };
 
-const chip: Record<LeaveType, string> = {
+const chip: Record<Kind, string> = {
   casual: 'bg-brand-50 text-brand-700 ring-brand-100',
   earned: 'bg-sky-50 text-sky-700 ring-sky-100',
+  leave: 'bg-brand-50 text-brand-700 ring-brand-100',
   wfh: 'bg-zinc-100 text-ink-600 ring-zinc-200',
 };
-const short: Record<LeaveType, string> = { casual: 'CL', earned: 'EL', wfh: 'WFH' };
+const short: Record<Kind, string> = { casual: 'CL', earned: 'EL', leave: 'Leave', wfh: 'WFH' };
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
 const iso = (d: Date) => d.toISOString().slice(0, 10);
 
 export default async function CalendarPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
-  await requireProfile(['superadmin', 'admin']);
+  const me = await requireProfile();
+  const staff = me.role !== 'employee';
   const sp = await searchParams;
   const today = todayIST();
   const month = /^\d{4}-\d{2}$/.test(sp.m ?? '') ? sp.m! : today.slice(0, 7);
@@ -50,13 +53,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
   const prev = new Date(Date.UTC(y, m - 2, 1)).toISOString().slice(0, 7);
   const next = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 7);
   const title = first.toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'UTC' });
-  const offCount = new Set(list.filter((e) => e.leave_type !== 'wfh').map((e) => e.employee_id)).size;
+  const offCount = new Set(list.filter((e) => e.leave_type !== 'wfh').map((e) => e.employee_id ?? e.full_name)).size;
 
   return (
     <>
       <PageHeader
         title="Team calendar"
-        description={`Approved leave and WFH · ${offCount} ${offCount === 1 ? 'person' : 'people'} on leave this view`}
+        description={staff
+          ? `Approved leave and WFH · ${offCount} ${offCount === 1 ? 'person' : 'people'} on leave in this view`
+          : 'Who’s away or working from home — plan around your team.'}
         actions={
           <div className="flex items-center gap-1">
             <Link href={`/calendar?m=${prev}`} className="grid h-9 w-9 place-items-center rounded-lg border border-line bg-white text-ink-500 shadow-xs hover:bg-canvas" aria-label="Previous month"><ChevronLeft className="h-4 w-4" /></Link>
@@ -68,8 +73,8 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
       />
 
       <div className="mb-3 flex flex-wrap gap-3 text-xs text-ink-500">
-        {(['casual', 'earned', 'wfh'] as LeaveType[]).map((t) => (
-          <span key={t} className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ring-1 ring-inset ${chip[t]}`} />{t === 'casual' ? 'Casual leave' : t === 'earned' ? 'Earned leave' : 'WFH'}</span>
+        {((staff ? ['casual', 'earned', 'wfh'] : ['leave', 'wfh']) as Kind[]).map((t) => (
+          <span key={t} className="inline-flex items-center gap-1.5"><span className={`h-2.5 w-2.5 rounded-sm ring-1 ring-inset ${chip[t]}`} />{t === 'casual' ? 'Casual leave' : t === 'earned' ? 'Earned leave' : t === 'leave' ? 'On leave' : 'WFH'}</span>
         ))}
         <span className="inline-flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-amber-100 ring-1 ring-inset ring-amber-200" />Holiday</span>
       </div>
@@ -98,11 +103,15 @@ export default async function CalendarPage({ searchParams }: { searchParams: Pro
                   {!isWeekend && !holiday && (
                     <ul className="space-y-1">
                       {items.slice(0, 4).map((e) => (
-                        <li key={e.employee_id + e.start_date}>
-                          <Link href={`/employees/${e.employee_id}`} title={`${e.full_name} · ${short[e.leave_type]}${e.half_day ? ` (${e.half_day_session} half)` : ''}`}
-                            className={`block truncate rounded px-1.5 py-0.5 text-2xs font-medium ring-1 ring-inset ${chip[e.leave_type]} ${inMonth ? '' : 'opacity-50'}`}>
-                            {e.full_name.split(' ')[0]} · {short[e.leave_type]}{e.half_day ? ' ½' : ''}
-                          </Link>
+                        <li key={`${e.full_name}-${e.start_date}-${e.leave_type}`}>
+                          {(() => {
+                            const label = `${e.full_name.split(' ')[0]} · ${short[e.leave_type]}${e.half_day ? ' ½' : ''}`;
+                            const title = `${e.full_name} · ${short[e.leave_type]}${e.half_day ? ` (${e.half_day_session} half)` : ''}`;
+                            const cls = `block truncate rounded px-1.5 py-0.5 text-2xs font-medium ring-1 ring-inset ${chip[e.leave_type]} ${inMonth ? '' : 'opacity-50'}`;
+                            return e.employee_id
+                              ? <Link href={`/employees/${e.employee_id}`} title={title} className={cls}>{label}</Link>
+                              : <span title={title} className={cls}>{label}</span>;
+                          })()}
                         </li>
                       ))}
                       {items.length > 4 && <li className="px-1.5 text-2xs text-ink-500">+{items.length - 4} more</li>}

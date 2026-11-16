@@ -19,22 +19,29 @@ export function BalanceCards({ row }: { row: LeaveOverview }) {
 
   return (
     <div className={`grid overflow-hidden rounded-lg border border-line bg-white ${cards.length === 3 ? 'sm:grid-cols-3' : 'sm:grid-cols-2'}`}>
-      {cards.map((c, i) => (
+      {cards.map((c, i) => {
+        const owed = Number(c.value) < 0;
+        return (
         <div key={c.label} className={`px-5 py-4 ${i > 0 ? 'border-t border-line sm:border-l sm:border-t-0' : ''}`}>
           <p className="text-[13px] font-medium text-ink-600">{c.label}</p>
           <p className="mt-1.5 flex items-baseline gap-1.5">
-            <span className="text-[28px] font-semibold leading-none tabular-nums text-ink">{days(c.value)}</span>
-            <span className="text-sm text-ink-500">days left</span>
+            <span className={`text-[28px] font-semibold leading-none tabular-nums ${owed ? 'text-red-600' : 'text-ink'}`}>{days(c.value)}</span>
+            <span className="text-sm text-ink-500">{owed ? 'days owed' : 'days left'}</span>
           </p>
           {c.progress !== null && (
             <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-100" aria-hidden>
-              <div className="h-full rounded-full bg-brand" style={{ width: `${c.progress}%` }} />
+              <div className={`h-full rounded-full ${owed ? 'bg-red-400' : 'bg-brand'}`} style={{ width: `${owed ? 100 : Math.max(0, c.progress)}%` }} />
             </div>
           )}
-          <p className="mt-2.5 text-xs text-ink-500">{c.hint}</p>
-          {Number(c.pending) > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{days(c.pending)} extra day(s) awaiting approval</p>}
+          <p className="mt-2.5 text-xs text-ink-500">
+            {owed
+              ? c.label.startsWith('WFH') ? 'Shortfall is taken off next month’s WFH' : 'Shortfall is repaid from your next monthly credits'
+              : c.hint}
+          </p>
+          {Number(c.pending) > 0 && <p className="mt-1 text-xs font-medium text-amber-700">{days(c.pending)} day(s) awaiting HR approval</p>}
         </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
