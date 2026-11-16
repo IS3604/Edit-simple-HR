@@ -1,5 +1,6 @@
 'use client';
 
+import { submitForm } from '@/lib/submit-form';
 import { useActionState, useRef, useState, useEffect } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -23,7 +24,7 @@ export function CancelButton({ id, approved = false }: { id: string; approved?: 
       <ConfirmDialog
         open={open}
         onClose={() => setOpen(false)}
-        onConfirm={() => form.current?.requestSubmit()}
+        onConfirm={() => submitForm(form.current)}
         loading={pending}
         danger
         title={approved ? 'Cancel approved leave?' : 'Cancel this request?'}

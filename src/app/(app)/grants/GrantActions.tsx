@@ -1,5 +1,6 @@
 'use client';
 
+import { submitForm } from '@/lib/submit-form';
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { Pencil, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
@@ -58,7 +59,7 @@ export function GrantActions({ grant }: { grant: Grant }) {
         </form>
       </Modal>
 
-      <ConfirmDialog open={revokeOpen} onClose={() => setRevokeOpen(false)} onConfirm={() => revokeForm.current?.requestSubmit()}
+      <ConfirmDialog open={revokeOpen} onClose={() => setRevokeOpen(false)} onConfirm={() => submitForm(revokeForm.current)}
         loading={revoking} danger title="Revoke this grant?" confirmLabel="Revoke grant"
         message={<>This removes <strong>{fmtDays(grant.days)} {LEAVE_LABEL[grant.leave_type]}</strong> from {grant.employeeName}’s balance. The grant stays in the history as revoked.</>} />
     </div>

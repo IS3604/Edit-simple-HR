@@ -1,5 +1,6 @@
 'use client';
 
+import { submitForm } from '@/lib/submit-form';
 import { useActionState, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
@@ -28,11 +29,11 @@ export function StatusForm({ id, status, isSelf }: { id: string; status: Employe
           : 'Restores sign-in. Monthly credits resume from the next month.'}
       </p>
       <Button type="button" variant={deactivate ? 'danger' : 'secondary'} loading={pending}
-        onClick={() => (deactivate ? setOpen(true) : form.current?.requestSubmit())}>
+        onClick={() => (deactivate ? setOpen(true) : submitForm(form.current))}>
         {deactivate ? 'Deactivate employee' : 'Reactivate employee'}
       </Button>
       <FormMessage state={state} />
-      <ConfirmDialog open={open} onClose={() => setOpen(false)} onConfirm={() => form.current?.requestSubmit()} loading={pending} danger
+      <ConfirmDialog open={open} onClose={() => setOpen(false)} onConfirm={() => submitForm(form.current)} loading={pending} danger
         title="Deactivate this employee?" confirmLabel="Deactivate"
         message="They will be signed out immediately, pending requests will be cancelled and monthly credits will stop." />
     </form>

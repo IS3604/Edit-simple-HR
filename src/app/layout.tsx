@@ -17,6 +17,9 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: 'EditSimple HR', statusBarStyle: 'default' },
 };
 
+// Run server code in Mumbai, next to the Supabase database (ap-south-1).
+export const preferredRegion = 'bom1';
+
 export const viewport: Viewport = { themeColor: '#FFFFFF', width: 'device-width', initialScale: 1 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

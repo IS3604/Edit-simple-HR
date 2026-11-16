@@ -4,7 +4,7 @@ import { isStaff, requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { todayIST } from '@/lib/leave-utils';
 import { formatDate } from '@/lib/format';
-import { getApplyContext } from '@/lib/apply-context';
+import { buildApplyContext, fetchApplyBasics } from '@/lib/apply-context';
 import { REQUEST_COLUMNS, type HrOverview, type LeaveOverview, type LeaveRequest, type LeaveTxn } from '@/lib/types';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -211,7 +211,7 @@ async function EmployeeDashboard({ firstName, employeeId, active }: { firstName:
 
   const weekEnd = addDays(today, 6);
   const supabase = await createClient();
-  const [{ data: ov }, { data: reqs }, { data: txns }, { data: hols }, { data: team }, { data: me }] = await Promise.all([
+  const [{ data: ov }, { data: reqs }, { data: txns }, { data: hols }, { data: team }, { data: me }, basics] = await Promise.all([
     supabase.from('leave_overview').select('*').eq('employee_id', employeeId).maybeSingle(),
     supabase.from('leave_requests').select(REQUEST_COLUMNS).eq('employee_id', employeeId)
       .or(`status.eq.pending,end_date.gte.${today}`).neq('status', 'cancelled').neq('status', 'rejected').order('start_date').limit(8),
@@ -220,11 +220,12 @@ async function EmployeeDashboard({ firstName, employeeId, active }: { firstName:
     supabase.from('holidays').select('id, holiday_date, name').gte('holiday_date', today).order('holiday_date').limit(10),
     supabase.rpc('team_calendar', { p_from: today, p_to: today }),
     supabase.from('employees').select('full_name').eq('id', employeeId).maybeSingle(),
+    fetchApplyBasics(),
   ]);
   const overview = ov as LeaveOverview | null;
   const upcoming = (reqs ?? []) as unknown as LeaveRequest[];
   const holidays = (hols ?? []) as { id: string; holiday_date: string; name: string }[];
-  const ctx = await getApplyContext(overview);
+  const ctx = buildApplyContext(overview, basics);
 
   // ---- Next 7 days
   const week: DayPlan[] = Array.from({ length: 7 }, (_, i) => {

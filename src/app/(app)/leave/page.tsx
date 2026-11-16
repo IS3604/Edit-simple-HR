@@ -1,7 +1,7 @@
 import { CalendarCheck2 } from 'lucide-react';
 import { requireProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { getApplyContext } from '@/lib/apply-context';
+import { buildApplyContext, fetchApplyBasics } from '@/lib/apply-context';
 import { REQUEST_COLUMNS, type LeaveOverview, type LeaveRequest } from '@/lib/types';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -27,13 +27,14 @@ export default async function MyLeavePage() {
   }
 
   const supabase = await createClient();
-  const [{ data: ov }, { data: reqs }] = await Promise.all([
+  const [{ data: ov }, { data: reqs }, basics] = await Promise.all([
     supabase.from('leave_overview').select('*').eq('employee_id', emp.id).maybeSingle(),
     supabase.from('leave_requests').select(REQUEST_COLUMNS).eq('employee_id', emp.id).order('start_date', { ascending: false }).limit(100),
+    fetchApplyBasics(),
   ]);
   const overview = ov as LeaveOverview | null;
   const requests = (reqs ?? []) as unknown as LeaveRequest[];
-  const ctx = await getApplyContext(overview);
+  const ctx = buildApplyContext(overview, basics);
   const today = ctx.today;
 
   return (

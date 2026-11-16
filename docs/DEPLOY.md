@@ -43,7 +43,7 @@ git push -u origin main
    | `RESEND_API_KEY` | *optional* — enables email alerts (resend.com, free tier) |
    | `EMAIL_FROM` | *optional* — e.g. `EditSimple HR <hr@editsimple.in>` (domain verified in Resend) |
 
-3. **Settings → Functions → Function Region**: pick the region closest to your Supabase project (Supabase → Project Settings → General shows it). Mumbai `ap-south-1` → Vercel `bom1`.
+3. Server code is pinned to Mumbai (`bom1`) in `vercel.json`, next to Supabase `ap-south-1`. If you ever move Supabase, change it there. **Settings → Functions → Function Region**: pick the region closest to your Supabase project (Supabase → Project Settings → General shows it). Mumbai `ap-south-1` → Vercel `bom1`.
 4. Deploy. Put the resulting URL into Supabase **Site URL** (step 1.4).
 
 ## Email alerts (optional)

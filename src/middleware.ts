@@ -2,6 +2,10 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  // Server actions (Apply, Grant, Approve…) verify the user themselves inside the action,
+  // so skip the extra auth round-trip here — it made every button press slower.
+  if (request.method === 'POST' && request.headers.has('next-action')) return NextResponse.next();
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
