@@ -1,5 +1,6 @@
 import Image from 'next/image';
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import { getCurrentProfile } from '@/lib/auth';
 import { LoginForm } from './LoginForm';
 
@@ -7,7 +8,9 @@ export const metadata = { title: 'Sign in' };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const profile = await getCurrentProfile();
-  if (profile?.is_active) redirect('/');
+  // Don't redirect while the sign-in action is responding — the form shows the success tick first.
+  const fromAction = (await headers()).has('next-action');
+  if (profile?.is_active && !fromAction) redirect('/');
 
   const { error } = await searchParams;
   const initialError = error === 'inactive' ? 'Your account is inactive. Please contact HR.' : undefined;

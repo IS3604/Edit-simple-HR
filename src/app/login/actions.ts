@@ -23,7 +23,8 @@ export async function signIn(_prev: ActionState, formData: FormData): Promise<Ac
     await supabase.auth.signOut();
     return { error: 'Your account is inactive. Please contact HR.' };
   }
-  redirect('/');
+  // Session cookies are set; the client shows the success tick, then navigates.
+  return { success: 'Signed in' };
 }
 
 export async function signOut() {

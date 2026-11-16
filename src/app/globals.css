@@ -34,3 +34,18 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 1ms !important; transition-duration: 1ms !important; }
 }
+
+/* Login success tick */
+.login-tick-circle {
+  stroke: theme('colors.emerald.500'); stroke-width: 2.5;
+  stroke-dasharray: 151; stroke-dashoffset: 151;
+  animation: tick-stroke .5s cubic-bezier(.65,0,.45,1) forwards;
+}
+.login-tick-check {
+  stroke: theme('colors.emerald.600'); stroke-width: 3.5; stroke-linecap: round; stroke-linejoin: round;
+  stroke-dasharray: 36; stroke-dashoffset: 36;
+  animation: tick-stroke .32s cubic-bezier(.65,0,.45,1) .45s forwards;
+}
+.login-tick { animation: tick-pop .3s ease-out .75s both; border-radius: 9999px; }
+@keyframes tick-stroke { to { stroke-dashoffset: 0; } }
+@keyframes tick-pop { 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
