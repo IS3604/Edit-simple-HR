@@ -5,12 +5,12 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { ArrowUp, Check, ChevronDown, Database, MessageSquarePlus, Sparkles, Square, Trash2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, Check, ChevronDown, Database, MessageSquarePlus, Sparkles, Square, Trash2, Zap } from 'lucide-react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Source } from '@/lib/assistant/agent';
 import { deleteAllChats, deleteChat } from './actions';
 
-export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number };
+export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number; cached?: boolean };
 type Chat = { id: string; title: string; updated_at: string };
 
 /** Survives the page remount Next.js does when ?c= changes, so the chat on screen is never lost. */
@@ -103,7 +103,22 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
   const msgRef = useRef(messages);
   msgRef.current = messages;
 
-  useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages, step, draft]);
+  // Scroll inside the chat box only (never the whole page). Follow new text unless the user scrolled up to read.
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [atBottom, setAtBottom] = useState(true);
+  const stick = useRef(true);
+  const scrollToBottom = (smooth = false) => {
+    const el = scrollRef.current; if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+    stick.current = true; setAtBottom(true);
+  };
+  const onScroll = () => {
+    const el = scrollRef.current; if (!el) return;
+    const near = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    stick.current = near; setAtBottom(near);
+  };
+  useEffect(() => { if (stick.current) scrollToBottom(); }, [messages, step, draft]);
+  useEffect(() => { scrollToBottom(); }, [currentId]);
   useEffect(() => { boxRef.current?.focus(); }, []);
 
   async function send(text: string) {
@@ -113,6 +128,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
     if (boxRef.current) boxRef.current.style.height = 'auto';
     msgRef.current = [...msgRef.current, { id: `u${Date.now()}`, role: 'user', content: q }];
     setMessages(msgRef.current);
+    stick.current = true;
     setBusy(true); setStep('Thinking'); setStepN(0); setDraft('');
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let steps = 0;
@@ -147,7 +163,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
           else if (ev.type === 'reset') setDraft('');
           else if (ev.type === 'error') fail(ev.message);
           else if (ev.type === 'done') {
-            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources }];
+            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources, cached: ev.cached }];
             msgRef.current = next; setMessages(next);
             memory.set(ev.chatId, next);
             if (ev.saveError) fail(`Answer shown, but it couldn’t be saved to this chat: ${ev.saveError}`);
@@ -198,7 +214,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
   return (
     <div className="grid gap-5 lg:grid-cols-[240px_1fr]">
       {/* Chat list (desktop) */}
-      <aside className="hidden lg:block">
+      <aside className="hidden lg:flex lg:h-[calc(100dvh-7.5rem)] lg:flex-col">
         <Link href="/assistant" className="mb-3 flex h-9 items-center justify-center gap-2 rounded-lg border border-line bg-white text-sm font-medium text-ink shadow-xs hover:bg-zinc-50">
           <MessageSquarePlus className="h-4 w-4 text-brand" /> New chat
         </Link>
@@ -208,11 +224,11 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
             <button type="button" onClick={() => setConfirm({ id: 'all', title: '' })} className="text-2xs font-medium text-ink-400 hover:text-red-600">Delete all</button>
           )}
         </div>
-        {list}
+        <div className="min-h-0 flex-1 overflow-y-auto pr-1">{list}</div>
       </aside>
 
       {/* Conversation */}
-      <section className="flex min-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-card">
+      <section className="flex h-[calc(100dvh-9rem)] min-h-[420px] flex-col overflow-hidden rounded-2xl border border-line bg-white shadow-card lg:h-[calc(100dvh-7.5rem)]">
         <header className="flex items-center justify-between gap-3 border-b border-line bg-gradient-to-r from-[#FFF4EC] via-white to-[#EEF6FC] px-5 py-3.5">
           <div className="flex items-center gap-2.5">
             <Avatar />
@@ -246,7 +262,8 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
           </details>
         )}
 
-        <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+        <div className="relative min-h-0 flex-1">
+        <div ref={scrollRef} onScroll={onScroll} className="h-full overflow-y-auto overscroll-contain px-4 py-6 sm:px-6">
           {setupError && <p className="mb-4 rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-800">{setupError}</p>}
           {messages.length === 0 && !busy ? (
             <div className="mx-auto max-w-2xl animate-pop-in pt-6 text-center">
@@ -278,6 +295,11 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
                       <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
                     </div>
                     {m.sources && <SourceChips sources={m.sources} steps={m.steps} />}
+                    {m.cached && (
+                      <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-2xs font-medium text-emerald-700 ring-1 ring-emerald-100">
+                        <Zap className="h-3 w-3" /> Instant answer · no AI tokens used · data unchanged
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -303,6 +325,13 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
               <div ref={endRef} />
             </div>
           )}
+        </div>
+        {!atBottom && (
+          <button type="button" onClick={() => scrollToBottom(true)} aria-label="Jump to latest"
+            className="absolute bottom-3 left-1/2 inline-flex -translate-x-1/2 animate-pop-in items-center gap-1 rounded-full border border-line bg-white/95 px-3 py-1.5 text-xs font-medium text-ink-600 shadow-pop backdrop-blur hover:text-ink">
+            <ArrowDown className="h-3.5 w-3.5" /> Latest
+          </button>
+        )}
         </div>
 
         <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="border-t border-line bg-white p-3 sm:p-4">

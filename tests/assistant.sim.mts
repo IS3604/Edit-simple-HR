@@ -3,6 +3,7 @@
 import assert from 'node:assert/strict';
 import { runAssistant, stepLabel, type AgentEvent } from '../src/lib/assistant/agent';
 import { runTool, TOOLS } from '../src/lib/assistant/tools';
+import { cacheKey, normalizeQuestion } from '../src/lib/assistant/cache';
 
 // ---- tiny chainable Supabase stub: records filters, returns canned rows per table/rpc ----
 type Rows = Record<string, unknown>[];
@@ -134,6 +135,18 @@ let n = 0; const ok = (m: string) => console.log(`  ✓ ${++n}. ${m}`);
   const r = await runAssistant(stub({ holidays: [] }), 'x', [], 'loop');
   assert.equal(hits, 8); assert.match(r.text, /too many lookups/);
   ok('errors: 401, missing key, failed or cut-off stream all give clear messages; tool loop capped at 8');
+}
+
+// 6. Cache keys
+{
+  assert.equal(normalizeQuestion('  Who is   Animesh?? '), 'who is animesh');
+  const a = cacheKey('Who is Animesh?', [], 'v1');
+  assert.equal(a, cacheKey('who is animesh', [], 'v1'));
+  assert.notEqual(a, cacheKey('who is animesh', [], 'v2'));
+  const h1 = [{ role: 'user' as const, content: 'who is animesh' }, { role: 'assistant' as const, content: 'Animesh is ES-001' }];
+  const h2 = [{ role: 'user' as const, content: 'who is ravi' }, { role: 'assistant' as const, content: 'Ravi is ES-007' }];
+  assert.notEqual(cacheKey('how many leaves does he have', h1, 'v1'), cacheKey('how many leaves does he have', h2, 'v1'));
+  ok('cache keys: same question matches regardless of case/punctuation; differ by data version and by context (follow-ups)');
 }
 
 console.log(`\nAll ${n} assistant checks passed.`);

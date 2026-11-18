@@ -404,6 +404,22 @@ assert.equal((await as(P.asha.uid, `select count(*)::int c from assistant_messag
 assert.ok(await err(as(null, `set local role anon; select * from assistant_chats`)));
 ok('Ask AI chats: Superadmin sees own chats; Admin/employees can’t read or write them');
 
+// Ask HR AI cache (0016): data version changes on every kind of HR change; Superadmin only
+const ver = async () => (await as(SA, `select hr_data_version() v`)).rows[0].v;
+let v0 = await ver();
+assert.equal(await ver(), v0);
+const vApply = await apply(P.ravi, 'earned', '2026-01-28', '2026-01-28'); let v1 = await ver(); assert.notEqual(v1, v0);
+await as(P.ravi.uid, `select cancel_request($1)`, [vApply.id]); let v2 = await ver(); assert.notEqual(v2, v1);
+await as(SA, `select grant_special($1, 'casual', 1, 'cache test')`, [P.ravi.emp]); let v3 = await ver(); assert.notEqual(v3, v2);
+await as(SA, `update holidays set name = name || ' ' where holiday_date = '2026-01-26'`); let v4 = await ver(); assert.notEqual(v4, v3);
+await as(SA, `update holidays set name = trim(name) where holiday_date = '2026-01-26'`);
+await as(SA, `update employees set department = 'QA' where id = $1`, [P.ravi.emp]); let v5 = await ver(); assert.notEqual(v5, v4);
+assert.equal((await as(AD, `select hr_data_version() v`)).rows[0].v, null);
+await as(SA, `insert into assistant_cache (key, answer) values ('k1', 'cached answer')`);
+assert.equal((await as(AD, `select count(*)::int c from assistant_cache`)).rows[0].c, 0);
+assert.ok(await err(as(P.asha.uid, `insert into assistant_cache (key, answer) values ('k2', 'x')`)));
+ok('AI cache: data fingerprint changes on apply, cancel, grant, holiday edit, employee edit; Superadmin-only');
+
 await checkInvariants('scripted');
 ok(`invariants hold after scripted scenarios${bugs.length ? ` (${bugs.length} issues!)` : ''}`);
 

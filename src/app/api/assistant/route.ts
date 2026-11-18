@@ -1,6 +1,7 @@
 import { getCurrentProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { runAssistant, type AgentEvent, type ChatTurn } from '@/lib/assistant/agent';
+import { runAssistant, type AgentEvent, type ChatTurn, type Source } from '@/lib/assistant/agent';
+import { cacheKey, dataVersion, readCache, writeCache } from '@/lib/assistant/cache';
 
 export const maxDuration = 60;
 export const preferredRegion = 'bom1';
@@ -39,7 +40,21 @@ export async function POST(req: Request) {
     async start(controller) {
       const send = (e: AgentEvent | Record<string, unknown>) => controller.enqueue(enc.encode(`${JSON.stringify(e)}\n`));
       try {
-        const answer = await runAssistant(db, me.full_name || me.email, history, text, send);
+        // Same question, same context, same day, unchanged data → reuse the answer (no AI tokens).
+        const version = await dataVersion(db);
+        const key = version ? cacheKey(text, history, version) : null;
+        let answer: { text: string; sources: Source[] };
+        let cached = false;
+        const hit = key ? await readCache(db, key) : null;
+        if (hit) {
+          cached = true;
+          send({ type: 'step', text: 'Found this answer earlier — data unchanged' });
+          answer = { text: hit.answer, sources: hit.sources };
+        } else {
+          answer = await runAssistant(db, me.full_name || me.email, history, text, send);
+          // Only cache answers that actually looked at data or are policy/off-topic replies — never errors.
+          if (key && !/too many lookups|couldn’t produce/.test(answer.text)) await writeCache(db, key, answer.text, answer.sources);
+        }
         if (!chatId) {
           const title = text.replace(/\s+/g, ' ').slice(0, 70) + (text.length > 70 ? '…' : '');
           const { data, error } = await db.from('assistant_chats').insert({ title }).select('id').single();
@@ -52,7 +67,7 @@ export async function POST(req: Request) {
         ]);
         if (saveErr) console.error('[assistant] save failed', saveErr);
         await db.from('assistant_chats').update({ updated_at: new Date().toISOString() }).eq('id', chatId);
-        send({ type: 'done', chatId, text: answer.text, sources: answer.sources, saveError: saveErr ? saveErr.message : undefined });
+        send({ type: 'done', chatId, text: answer.text, sources: answer.sources, cached, saveError: saveErr ? saveErr.message : undefined });
       } catch (e) {
         send({ type: 'error', message: e instanceof Error ? e.message : 'The assistant failed. Try again.' });
       } finally {
