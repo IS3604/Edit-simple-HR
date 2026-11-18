@@ -39,12 +39,13 @@ export async function POST(req: Request) {
           if (error || !data) throw new Error('Could not save the chat. Has migration 0015 been run in Supabase?');
           chatId = data.id as string;
         }
-        await db.from('assistant_messages').insert([
+        const { error: saveErr } = await db.from('assistant_messages').insert([
           { chat_id: chatId, role: 'user', content: text },
           { chat_id: chatId, role: 'assistant', content: answer.text.slice(0, 40000), sources: answer.sources },
         ]);
+        if (saveErr) console.error('[assistant] save failed', saveErr);
         await db.from('assistant_chats').update({ updated_at: new Date().toISOString() }).eq('id', chatId);
-        send({ type: 'done', chatId, text: answer.text, sources: answer.sources });
+        send({ type: 'done', chatId, text: answer.text, sources: answer.sources, saveError: saveErr ? saveErr.message : undefined });
       } catch (e) {
         send({ type: 'error', message: e instanceof Error ? e.message : 'The assistant failed. Try again.' });
       } finally {

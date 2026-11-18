@@ -201,9 +201,9 @@ async function EmployeeDashboard({ firstName, employeeId, active }: { firstName:
     const dow = new Date(`${date}T00:00:00Z`).getUTCDay();
     const hol = holidays.find((h) => h.holiday_date === date);
     if (hol) return { date, kind: 'holiday', label: hol.name };
+    if (ctx.weekendDays.includes(dow)) return { date, kind: 'weekend' };
     const r = upcoming.find((x) => x.start_date <= date && x.end_date >= date);
     if (r) return { date, kind: r.status === 'pending' ? 'pending' : r.leave_type === 'wfh' ? 'wfh' : 'leave', half: r.half_day };
-    if (ctx.weekendDays.includes(dow)) return { date, kind: 'weekend' };
     return { date, kind: overview?.category === 'permanent_wfh' ? 'wfh' : 'work', label: overview?.category === 'permanent_wfh' ? 'Remote' : undefined };
   });
   const todayPlan = week[0];

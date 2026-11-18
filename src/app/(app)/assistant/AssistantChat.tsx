@@ -13,6 +13,13 @@ import { deleteAllChats, deleteChat } from './actions';
 export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number };
 type Chat = { id: string; title: string; updated_at: string };
 
+/** Survives the page remount Next.js does when ?c= changes, so the chat on screen is never lost. */
+const memory = new Map<string, Msg[]>();
+const pick = (id: string | null, server: Msg[]) => {
+  const mem = id ? memory.get(id) : undefined;
+  return mem && mem.length > server.length ? mem : server;
+};
+
 const SUGGESTIONS = [
   'Who is on leave or WFH this week?',
   'Which employees have the most unpaid days this year?',
@@ -22,10 +29,10 @@ const SUGGESTIONS = [
   'Draft a polite email reminding the team to plan December leave',
 ];
 
-function Avatar() {
+function Avatar({ working = false }: { working?: boolean }) {
   return (
-    <span className="mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-amber-400 text-white shadow-xs">
-      <Sparkles className="h-3.5 w-3.5" />
+    <span className={`relative mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-gradient-to-br from-brand to-amber-400 text-white shadow-xs ${working ? 'ai-avatar-glow' : ''}`}>
+      <Sparkles className={`h-3.5 w-3.5 ${working ? 'ai-spark' : ''}`} />
     </span>
   );
 }
@@ -60,11 +67,7 @@ function SourceChips({ sources, steps }: { sources: Source[]; steps?: number }) 
 /** One step at a time: the current step slides in and shimmers; the counter ticks up. */
 function StepTicker({ step, n }: { step: string; n: number }) {
   return (
-    <div className="flex items-center gap-2.5 py-0.5">
-      <span className="relative grid h-4 w-4 place-items-center">
-        <span className="absolute h-4 w-4 animate-ping rounded-full bg-brand/30" />
-        <span className="h-2 w-2 rounded-full bg-brand" />
-      </span>
+    <div className="flex items-center gap-2 py-0.5">
       <span key={step} className="ai-step-in ai-shimmer text-[13px] font-medium">{step}</span>
       {n > 1 && <span key={`n${n}`} className="ai-step-in rounded-full bg-white px-1.5 text-2xs text-ink-400 ring-1 ring-line">step {n}</span>}
     </div>
@@ -75,7 +78,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
   chatId: string | null; chats: Chat[]; initialMessages: Msg[]; firstName: string; setupError: string | null;
 }) {
   const router = useRouter();
-  const [messages, setMessages] = useState<Msg[]>(initialMessages);
+  const [messages, setMessages] = useState<Msg[]>(() => pick(chatId, initialMessages));
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [step, setStep] = useState('');
@@ -88,6 +91,18 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
   const boxRef = useRef<HTMLTextAreaElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
+  // Switch chats only when the user opens a different chat — never wipe the one on screen
+  // just because the server re-rendered (e.g. after saving a new chat).
+  const shownId = useRef(chatId);
+  useEffect(() => {
+    if (chatId === shownId.current) return;
+    shownId.current = chatId;
+    if (chatId !== currentId || !chatId) { setMessages(pick(chatId, initialMessages)); setCurrentId(chatId); }
+  }, [chatId, initialMessages, currentId]);
+  useEffect(() => { if (currentId) memory.set(currentId, messages); }, [currentId, messages]);
+  const msgRef = useRef(messages);
+  msgRef.current = messages;
+
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' }); }, [messages, step, draft]);
   useEffect(() => { boxRef.current?.focus(); }, []);
 
@@ -96,7 +111,8 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
     if (!q || busy) return;
     setInput('');
     if (boxRef.current) boxRef.current.style.height = 'auto';
-    setMessages((m) => [...m, { id: `u${Date.now()}`, role: 'user', content: q }]);
+    msgRef.current = [...msgRef.current, { id: `u${Date.now()}`, role: 'user', content: q }];
+    setMessages(msgRef.current);
     setBusy(true); setStep('Thinking'); setStepN(0); setDraft('');
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let steps = 0;
@@ -128,8 +144,13 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
           else if (ev.type === 'reset') setDraft('');
           else if (ev.type === 'error') fail(ev.message);
           else if (ev.type === 'done') {
-            setMessages((m) => [...m, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources }]);
-            if (!currentId) { setCurrentId(ev.chatId); window.history.replaceState(null, '', `/assistant?c=${ev.chatId}`); }
+            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources }];
+            msgRef.current = next; setMessages(next);
+            memory.set(ev.chatId, next);
+            if (ev.saveError) fail(`Answer shown, but it couldn’t be saved to this chat: ${ev.saveError}`);
+            // Don't change the URL here: Next.js remounts the page when ?c= changes, which would
+            // reset the conversation on screen. The chat is saved and appears under Recent.
+            if (!currentId) setCurrentId(ev.chatId);
             router.refresh();
           }
         }
@@ -149,7 +170,8 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
     setDeleting(false);
     const wasCurrent = confirm.id === 'all' || confirm.id === currentId;
     setConfirm(null);
-    if (wasCurrent) { setMessages([]); setCurrentId(null); router.push('/assistant'); } else router.refresh();
+    if (confirm.id === 'all') memory.clear(); else memory.delete(confirm.id);
+    if (wasCurrent) { setMessages([]); setCurrentId(null); shownId.current = null; router.push('/assistant'); } else router.refresh();
   }
 
   const list = (
@@ -259,15 +281,15 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
 
               {busy && (
                 <div className="flex animate-pop-in gap-3">
-                  <Avatar />
+                  <Avatar working />
                   <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-line bg-[#FBF9F6] px-4 py-3">
                     {draft ? (
                       <div className="assistant-md ai-typing text-[14px] leading-relaxed text-ink">
                         <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown>
                       </div>
                     ) : stepN === 0 ? (
-                      <div className="flex items-center gap-1.5 py-1.5" aria-label="Thinking">
-                        {[0, 1, 2].map((i) => <span key={i} className="ai-dot h-2 w-2 rounded-full bg-brand/70" style={{ animationDelay: `${i * 160}ms` }} />)}
+                      <div className="py-0.5" aria-live="polite">
+                        <span className="ai-shimmer text-[13px] font-medium">Thinking…</span>
                       </div>
                     ) : (
                       <StepTicker step={step} n={stepN} />
@@ -299,7 +321,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
               </button>
             )}
           </div>
-          <p className="mx-auto mt-1.5 max-w-3xl px-2 text-2xs text-ink-400">Enter to send · Shift+Enter for a new line · Employee data is sent to OpenAI to answer.</p>
+          <p className="mx-auto mt-1.5 max-w-3xl px-2 text-2xs text-ink-400">Press Enter to send, Shift + Enter for a new line. Answers come from your live HR data.</p>
         </form>
       </section>
 

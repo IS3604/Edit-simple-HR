@@ -80,3 +80,9 @@
   border-radius: 2px; background: #E8622F; animation: ai-caret 1s steps(1) infinite;
 }
 @media (prefers-reduced-motion: reduce) { .ai-step-in, .ai-shimmer, .ai-dot, .ai-typing > *:last-child::after { animation: none; } .ai-shimmer { color: #71717A; } }
+/* Working sparkle (Claude-style): slow turn + breathe, soft glow on the avatar */
+@keyframes ai-spark { 0% { transform: rotate(0) scale(1); } 50% { transform: rotate(180deg) scale(.82); } 100% { transform: rotate(360deg) scale(1); } }
+.ai-spark { animation: ai-spark 1.8s cubic-bezier(.45,.05,.55,.95) infinite; }
+@keyframes ai-glow { 0%, 100% { box-shadow: 0 0 0 0 rgba(232,98,47,.35); } 50% { box-shadow: 0 0 0 6px rgba(232,98,47,0); } }
+.ai-avatar-glow { animation: ai-glow 1.8s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .ai-spark, .ai-avatar-glow { animation: none; } }

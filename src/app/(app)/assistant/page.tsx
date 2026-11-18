@@ -19,7 +19,6 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
 
   return (
     <AssistantChat
-      key={c ?? 'new'}
       chatId={c ?? null}
       chats={(chats ?? []) as { id: string; title: string; updated_at: string }[]}
       initialMessages={messages}
