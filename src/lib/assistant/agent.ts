@@ -46,8 +46,9 @@ Scope (strict)
   - propose_edit_employee: change name, employee ID, department, designation, joining date or category.
   - propose_set_employee_status: deactivate or reactivate an employee.
   - propose_holiday: add or remove a company holiday.
+  - propose_set_allocation: set the monthly CL / EL / WFH allocation for one or more employees or everyone ("allot", "allocate", "set monthly leave"). If the user gives three numbers like "1,1,4", they mean CL, EL, WFH per month.
 - One proposal per request unless the user clearly asks for several. If a propose tool returns problems or several candidates, explain and ask — don't guess.
-- For anything else (e.g. allocations, weekend days, user roles), tell the user where to do it in the app.
+- For anything else (e.g. weekend days, user roles), tell the user where to do it in the app.
 
 Leave policy (for explanations)
 - Casual Leave (CL): credited monthly; unused CL expires on 31 Dec; can't go below 0.
@@ -89,6 +90,7 @@ export function stepLabel(name: string, a: Record<string, unknown>): string {
     case 'propose_grant_change': return `Preparing to ${a.action === 'edit' ? 'edit' : 'revoke'} ${who ? `${who}’s ` : 'the '}grant`;
     case 'propose_edit_employee': return `Preparing changes to ${who || 'the employee'}’s details`;
     case 'propose_set_employee_status': return `Preparing to ${a.status === 'inactive' ? 'deactivate' : 'reactivate'} ${who || 'the employee'}`;
+    case 'propose_set_allocation': return `Preparing monthly allocation${a.all_active ? ' for everyone' : ''}`;
     case 'propose_holiday': return a.action === 'remove' ? 'Preparing to remove a holiday' : `Preparing to add ${a.name ? `“${a.name}”` : 'a holiday'}`;
     default: return `Checking ${TOOL_LABEL[name] ?? name}`;
   }

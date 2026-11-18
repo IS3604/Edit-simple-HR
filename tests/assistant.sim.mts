@@ -276,10 +276,17 @@ let n = 0; const ok = (m: string) => console.log(`  ✓ ${++n}. ${m}`);
   assert.deepEqual([r.proposal.kind, r.proposal.fields.holiday_id], ['remove_holiday', 'h1']);
   ok('holidays: add (duplicate date refused), remove by date');
 
+  r = await T('propose_set_allocation', { employees: ['Asha', 'Zoya'], casual: 1, earned: 1, wfh: 4 });
+  assert.equal(r.proposal.kind, 'set_allocation');
+  assert.deepEqual(r.proposal.fields.rows.map((x: { wfh: number }) => x.wfh), [4, 0]);
+  r = await T('propose_set_allocation', { employees: ['Asha'], casual: 1, earned: 40, wfh: 4 });
+  assert.match(r.problems[0], /0 to 31/);
+  ok('allocation: "allot 1,1,4" card for several employees; Permanent WFH gets WFH 0; invalid numbers refused');
+
   const names = TOOLS.filter((t) => t.name.startsWith('propose_')).map((t) => t.name);
-  assert.equal(names.length, 8);
+  assert.equal(names.length, 9);
   for (const t of TOOLS.filter((x) => x.name.startsWith('propose_'))) assert.ok(!JSON.stringify(t.parameters).includes('password'));
-  ok('8 proposal tools; none takes a password');
+  ok('9 proposal tools; none takes a password');
 }
 
 console.log(`\nAll ${n} assistant checks passed.`);

@@ -165,6 +165,7 @@ function ChangeCard({ proposal }: { proposal: Proposal }) {
     edit_grant: { title: Number(f.days) < 0 ? 'Edit deduction' : 'Edit grant', icon: Gift, confirm: 'Save change' },
     edit_employee: { title: 'Edit employee', icon: Pencil, confirm: 'Save changes' },
     set_status: { title: f.status === 'inactive' ? 'Deactivate employee' : 'Reactivate employee', icon: UserCog, danger: f.status === 'inactive', confirm: f.status === 'inactive' ? 'Deactivate' : 'Reactivate' },
+    set_allocation: { title: 'Set monthly allocation', icon: Gift, confirm: 'Save allocation' },
     add_holiday: { title: 'Add holiday', icon: CalendarPlus, confirm: 'Add holiday' },
     remove_holiday: { title: 'Remove holiday', icon: CalendarX, danger: true, confirm: 'Remove holiday' },
   };
@@ -246,6 +247,25 @@ function ChangeCard({ proposal }: { proposal: Proposal }) {
         {k === 'set_status' && (<>
           <Row label="Employee">{String(f.employee)}</Row>
           <Row label="Change">{f.status === 'inactive' ? 'Deactivate — sign-in blocked, monthly credits stop' : 'Reactivate — sign-in allowed again'}</Row>
+        </>)}
+
+        {k === 'set_allocation' && (<>
+          <div className="grid grid-cols-3 gap-3 py-2">
+            {(['casual', 'earned', 'wfh'] as const).map((t) => (
+              <label key={t} className="text-xs font-medium text-ink-600">{t === 'casual' ? 'CL / month' : t === 'earned' ? 'EL / month' : 'WFH / month'}
+                <input type="number" min={0} max={31} step={0.5} className={input} value={Number(f[t])} onChange={set(t)} />
+              </label>
+            ))}
+          </div>
+          <div className="max-h-52 overflow-y-auto py-1">
+            {((f.rows as { employee: string; current: string; permanent_wfh: boolean }[]) ?? []).map((r) => (
+              <Row key={r.employee} label={r.employee}>
+                <span className="font-normal text-ink-400">{r.current}</span>{' → '}
+                {fmtDays(Number(f.casual))} / {fmtDays(Number(f.earned))} / {r.permanent_wfh ? '0 (Permanent WFH)' : fmtDays(Number(f.wfh))}
+              </Row>
+            ))}
+          </div>
+          <p className="py-2 text-2xs text-ink-500">CL / EL / WFH per month. If this month hasn’t been credited yet, it’s credited right away.</p>
         </>)}
 
         {(k === 'add_holiday' || k === 'remove_holiday') && (<>

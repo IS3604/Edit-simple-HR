@@ -5,7 +5,7 @@ import type { ActionState } from '@/lib/types';
 import { decideRequest } from '../requests/actions';
 import { cancelRequest } from '../leave/actions';
 import { editGrant, grantSpecial, revokeGrant } from '../grants/actions';
-import { setEmployeeStatus, updateEmployee } from '../employees/actions';
+import { saveAllocation, setEmployeeStatus, updateEmployee } from '../employees/actions';
 import { addHoliday, deleteHoliday } from '../holidays/actions';
 
 /**
@@ -40,6 +40,20 @@ export async function executeProposal(kind: string, fields: Record<string, unkno
     case 'set_status':
       put({ id: f.employee_id, status: f.status });
       r = await setEmployeeStatus(undefined, fd); break;
+    case 'set_allocation': {
+      const rows = (f.rows as { employee_id: string; employee: string; permanent_wfh: boolean }[]) ?? [];
+      const failed: string[] = []; let credited = 0;
+      for (const row of rows) {
+        const one = new FormData();
+        one.set('id', row.employee_id); one.set('casual', String(f.casual)); one.set('earned', String(f.earned)); one.set('wfh', row.permanent_wfh ? '0' : String(f.wfh)); // card edits apply to every row
+        const res = await saveAllocation(undefined, one);
+        if (res?.error) failed.push(`${row.employee}: ${res.error}`);
+        else if (res?.success?.includes('credited')) credited++;
+      }
+      if (failed.length === rows.length) return { ok: false, message: failed.join(' · ') };
+      const done = rows.length - failed.length;
+      return { ok: failed.length === 0, message: `Allocation set for ${done} employee${done === 1 ? '' : 's'}${credited ? ` (${credited} credited for this month)` : ''}.${failed.length ? ` Failed: ${failed.join(' · ')}` : ''}` };
+    }
     case 'add_holiday':
       put({ holiday_date: f.date, name: f.name });
       r = await addHoliday(undefined, fd); break;

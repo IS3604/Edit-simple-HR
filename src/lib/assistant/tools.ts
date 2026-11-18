@@ -718,7 +718,55 @@ TOOLS.push(
   },
 );
 
-export type ProposalKind = 'add_employee' | 'balance_change' | 'decide_request' | 'cancel_request' | 'revoke_grant' | 'edit_grant' | 'edit_employee' | 'set_status' | 'add_holiday' | 'remove_holiday';
+TOOLS.push({
+  name: 'propose_set_allocation',
+  description: 'PROPOSE setting the MONTHLY allocation (CL, EL, WFH credited each month) for one or more employees, or for all active employees. Shows a confirmation card with current → new; nothing changes until the Superadmin confirms. If the current month has not been credited yet, it is credited immediately on confirm.',
+  parameters: {
+    type: 'object',
+    properties: {
+      employees: { type: 'array', items: { type: 'string' }, description: 'Names / codes / emails. Omit and set all_active for everyone.' },
+      all_active: { type: 'boolean' },
+      casual: { type: 'number' }, earned: { type: 'number' }, wfh: { type: 'number' },
+    },
+    required: ['casual', 'earned', 'wfh'], additionalProperties: false,
+  },
+  async run(db, a) {
+    const vals = { casual: Number(a.casual), earned: Number(a.earned), wfh: Number(a.wfh) };
+    for (const v of Object.values(vals)) if (!(v >= 0 && v <= 31 && Number.isInteger(v * 2))) return { saved: false, problems: ['Use numbers from 0 to 31, in steps of 0.5.'] };
+    let emps: Json[] = [];
+    if (a.all_active) {
+      const { data } = await db.from('employees').select(EMP_COLS).eq('status', 'active').order('full_name').limit(500);
+      emps = (data ?? []) as Json[];
+    } else {
+      const names = Array.isArray(a.employees) ? (a.employees as unknown[]).slice(0, 50) : [];
+      if (!names.length) return { saved: false, problems: ['Say which employees, or everyone.'] };
+      for (const nm of names) {
+        const r = await resolveEmployee(db, nm);
+        if (!r.emp) return { error: r.error, candidates: r.candidates };
+        if (!emps.some((e) => e.id === r.emp!.id)) emps.push(r.emp);
+      }
+    }
+    if (!emps.length) return fail('No employees found.');
+    const { data: cur } = await db.from('leave_allocations').select('employee_id, casual_per_month, earned_per_month, wfh_per_month, configured_at')
+      .in('employee_id', emps.map((e) => e.id as string));
+    const byId = new Map(((cur ?? []) as Json[]).map((c) => [c.employee_id as string, c]));
+    const rows = emps.map((e) => {
+      const c = byId.get(e.id as string);
+      const pwfh = e.category === 'permanent_wfh';
+      return {
+        employee_id: e.id, employee: `${e.full_name} (${e.employee_code})`, permanent_wfh: pwfh,
+        current: c?.configured_at ? `${Number(c.casual_per_month)} / ${Number(c.earned_per_month)} / ${Number(c.wfh_per_month)}` : 'not set',
+        wfh: pwfh ? 0 : vals.wfh,
+      };
+    });
+    return {
+      proposal: { kind: 'set_allocation', fields: { casual: vals.casual, earned: vals.earned, wfh: vals.wfh, rows } },
+      ...shown(rows.some((r) => r.permanent_wfh) ? 'Permanent WFH employees get WFH 0.' : ''),
+    };
+  },
+});
+
+export type ProposalKind = 'set_allocation' | 'add_employee' | 'balance_change' | 'decide_request' | 'cancel_request' | 'revoke_grant' | 'edit_grant' | 'edit_employee' | 'set_status' | 'add_holiday' | 'remove_holiday';
 export type Proposal = { kind: ProposalKind; fields: Record<string, unknown> };
 
 export const TOOL_LABEL: Record<string, string> = {
@@ -726,7 +774,7 @@ export const TOOL_LABEL: Record<string, string> = {
   list_requests: 'Requests', leave_report: 'Leave report', balance_history: 'Balance history',
   list_grants: 'Grants', who_is_out: 'Team calendar', list_holidays: 'Holidays', list_users: 'Users & roles',
   simulate_year: 'What-if planner',
-  propose_add_employee: 'Add employee (proposal)', propose_balance_change: 'Balance change (proposal)',
+  propose_add_employee: 'Add employee (proposal)', propose_set_allocation: 'Allocation (proposal)', propose_balance_change: 'Balance change (proposal)',
   propose_decide_request: 'Decision (proposal)', propose_cancel_request: 'Cancel request (proposal)', propose_grant_change: 'Grant change (proposal)',
   propose_edit_employee: 'Edit employee (proposal)', propose_set_employee_status: 'Employee status (proposal)', propose_holiday: 'Holiday (proposal)',
 };
