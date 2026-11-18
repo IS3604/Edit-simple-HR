@@ -26,6 +26,13 @@ export async function POST(req: Request) {
     if (error) return Response.json({ error: 'Could not load this chat.' }, { status: 400 });
     history = ((data ?? []) as ChatTurn[]).reverse();
   }
+  // Backup: the conversation on screen, in case saved history is missing.
+  if (history.length === 0 && Array.isArray(body?.history)) {
+    history = (body.history as unknown[])
+      .filter((h): h is ChatTurn => !!h && typeof h === 'object' && ['user', 'assistant'].includes((h as ChatTurn).role) && typeof (h as ChatTurn).content === 'string')
+      .slice(-16)
+      .map((h) => ({ role: h.role, content: h.content.slice(0, 8000) }));
+  }
 
   const enc = new TextEncoder();
   const stream = new ReadableStream({
@@ -40,7 +47,7 @@ export async function POST(req: Request) {
           chatId = data.id as string;
         }
         const { error: saveErr } = await db.from('assistant_messages').insert([
-          { chat_id: chatId, role: 'user', content: text },
+          { chat_id: chatId, role: 'user', content: text, sources: [] }, // every row needs the same columns in a bulk insert
           { chat_id: chatId, role: 'assistant', content: answer.text.slice(0, 40000), sources: answer.sources },
         ]);
         if (saveErr) console.error('[assistant] save failed', saveErr);

@@ -120,7 +120,10 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
     try {
       const res = await fetch('/api/assistant', {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: ctrl.signal,
-        body: JSON.stringify({ chatId: currentId, message: q }),
+        body: JSON.stringify({
+          chatId: currentId, message: q,
+          history: msgRef.current.slice(0, -1).filter((m) => !m.error).slice(-16).map((m) => ({ role: m.role, content: m.content })),
+        }),
       });
       if (!res.ok || !res.body) {
         const j = await res.json().catch(() => null);
