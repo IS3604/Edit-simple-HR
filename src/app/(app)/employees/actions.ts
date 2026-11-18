@@ -15,7 +15,8 @@ import {
 
 const BAN_FOREVER = '876000h';
 
-export async function createEmployee(_prev: ActionState, fd: FormData): Promise<ActionState> {
+/** Shared by the Add employee form and the Ask HR AI confirmation card. */
+async function createEmployeeCore(fd: FormData): Promise<{ error?: string; id?: string; linked?: boolean; code?: string; name?: string }> {
   const me = await requireProfile(['superadmin']);
   const parsed = parseNewEmployee(fd);
   if (parsed.error || !parsed.data) return { error: parsed.error };
@@ -71,7 +72,18 @@ export async function createEmployee(_prev: ActionState, fd: FormData): Promise<
   }
 
   revalidatePath('/employees');
-  redirect(`/employees/${emp.id}?created=1${existing ? '&linked=1' : ''}`);
+  return { id: emp.id as string, linked: !!existing, code: fields.employee_code, name: fields.full_name };
+}
+
+export async function createEmployee(_prev: ActionState, fd: FormData): Promise<ActionState> {
+  const r = await createEmployeeCore(fd);
+  if (r.error || !r.id) return { error: r.error };
+  redirect(`/employees/${r.id}?created=1${r.linked ? '&linked=1' : ''}`);
+}
+
+/** Ask HR AI card: same checks as the form, but returns instead of redirecting. */
+export async function createEmployeeFromChat(fd: FormData): Promise<{ error?: string; id?: string; name?: string; code?: string; linked?: boolean }> {
+  return createEmployeeCore(fd);
 }
 
 export async function updateEmployee(_prev: ActionState, fd: FormData): Promise<ActionState> {

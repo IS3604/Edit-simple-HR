@@ -53,7 +53,9 @@ export async function POST(req: Request) {
         } else {
           answer = await runAssistant(db, me.full_name || me.email, history, text, send);
           // Only cache answers that actually looked at data or are policy/off-topic replies — never errors.
-          if (key && !/too many lookups|couldn’t produce/.test(answer.text)) await writeCache(db, key, answer.text, answer.sources);
+          // Never cache proposals (the confirmation card must come from a fresh run).
+          const proposed = answer.sources.some((src) => src.tool.startsWith('propose_'));
+          if (key && !proposed && !/too many lookups|couldn’t produce/.test(answer.text)) await writeCache(db, key, answer.text, answer.sources);
         }
         if (!chatId) {
           const title = text.replace(/\s+/g, ' ').slice(0, 70) + (text.length > 70 ? '…' : '');

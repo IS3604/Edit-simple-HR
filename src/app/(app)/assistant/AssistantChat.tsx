@@ -9,9 +9,23 @@ import { ArrowDown, ArrowUp, Check, ChevronDown, Database, MessageSquarePlus, Sp
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Source } from '@/lib/assistant/agent';
 import { deleteAllChats, deleteChat } from './actions';
+import { ActionCard, type Proposal } from './ActionCard';
 
-export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number; cached?: boolean };
+export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number; cached?: boolean; proposals?: Proposal[] };
 type Chat = { id: string; title: string; updated_at: string };
+
+/** Safe rendering: only in-app links; no images (they could leak data via the URL). */
+const mdProps = {
+  remarkPlugins: [remarkGfm],
+  disallowedElements: ['img', 'iframe', 'script', 'style'],
+  unwrapDisallowed: true,
+  components: {
+    a: ({ href, children }: { href?: string; children?: React.ReactNode }) =>
+      href && href.startsWith('/') && !href.startsWith('//')
+        ? <Link href={href}>{children}</Link>
+        : <span>{children}</span>,
+  },
+};
 
 /** Survives the page remount Next.js does when ?c= changes, so the chat on screen is never lost. */
 const memory = new Map<string, Msg[]>();
@@ -132,6 +146,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
     setBusy(true); setStep('Thinking'); setStepN(0); setDraft('');
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let steps = 0;
+    const proposals: Proposal[] = [];
     const fail = (message: string) => setMessages((m) => [...m, { id: `e${Date.now()}`, role: 'assistant', content: message, error: true }]);
     try {
       const res = await fetch('/api/assistant', {
@@ -161,9 +176,10 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
           if (ev.type === 'step') { steps++; setStep(ev.text); setStepN(steps); }
           else if (ev.type === 'delta') setDraft((d) => d + ev.text);
           else if (ev.type === 'reset') setDraft('');
+          else if (ev.type === 'action') proposals.push(ev.proposal);
           else if (ev.type === 'error') fail(ev.message);
           else if (ev.type === 'done') {
-            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources, cached: ev.cached }];
+            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources, cached: ev.cached, proposals: proposals.length ? proposals : undefined }];
             msgRef.current = next; setMessages(next);
             memory.set(ev.chatId, next);
             if (ev.saveError) fail(`Answer shown, but it couldn’t be saved to this chat: ${ev.saveError}`);
@@ -234,7 +250,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
             <Avatar />
             <div>
               <h1 className="text-[15px] font-semibold text-ink">Ask HR AI</h1>
-              <p className="text-2xs text-ink-500">Answers from live HR data · read-only · Superadmin only</p>
+              <p className="text-2xs text-ink-500">Answers from live HR data · asks before changing anything · Superadmin only</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -292,8 +308,9 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
                   <Avatar />
                   <div className={`min-w-0 flex-1 rounded-2xl rounded-tl-md border px-4 py-3 ${m.error ? 'border-red-200 bg-red-50 text-red-700' : 'border-line bg-[#FBF9F6]'}`}>
                     <div className="assistant-md text-[14px] leading-relaxed text-ink">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{m.content}</ReactMarkdown>
+                      <ReactMarkdown {...mdProps}>{m.content}</ReactMarkdown>
                     </div>
+                    {m.proposals?.map((p, i) => <ActionCard key={i} proposal={p} />)}
                     {m.sources && <SourceChips sources={m.sources} steps={m.steps} />}
                     {m.cached && (
                       <p className="mt-2 inline-flex items-center gap-1 rounded-md bg-emerald-50 px-1.5 py-0.5 text-2xs font-medium text-emerald-700 ring-1 ring-emerald-100">
@@ -310,7 +327,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
                   <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-line bg-[#FBF9F6] px-4 py-3">
                     {draft ? (
                       <div className="assistant-md ai-typing text-[14px] leading-relaxed text-ink">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{draft}</ReactMarkdown>
+                        <ReactMarkdown {...mdProps}>{draft}</ReactMarkdown>
                       </div>
                     ) : stepN === 0 ? (
                       <div className="py-0.5" aria-live="polite">

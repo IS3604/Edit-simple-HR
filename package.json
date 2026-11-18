@@ -12,6 +12,7 @@
     "test:scenarios": "node tests/scenarios.test.mjs",
     "test:upgrade": "node tests/upgrade-v2.test.mjs",
     "test:assistant": "tsx --conditions=react-server tests/assistant.sim.mts",
+    "test:planner": "tsx --conditions=react-server tests/simulate.cross.mts",
     "test:push": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx --conditions=react-server tests/push.sim.mts"
   },
   "dependencies": {
