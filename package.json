@@ -11,6 +11,7 @@
     "create-superadmin": "tsx scripts/create-superadmin.mts",
     "test:scenarios": "node tests/scenarios.test.mjs",
     "test:upgrade": "node tests/upgrade-v2.test.mjs",
+    "test:assistant": "tsx --conditions=react-server tests/assistant.sim.mts",
     "test:push": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx --conditions=react-server tests/push.sim.mts"
   },
   "dependencies": {
@@ -24,6 +25,8 @@
     "next": "^15.5.29",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
     "server-only": "^0.0.1",
     "web-push": "^4.0.0"
   },

@@ -393,6 +393,17 @@ await as(SA, `select update_special_grant($1, 1, 'Festival')`, [gr]);
 assert.equal((await bal(P.ravi)).c, rc0 - 2);
 ok('Edit grant 3 → 1 CL removes 2 days');
 
+// Ask AI chats (0015): Superadmin only, own chats only
+const chat = (await as(SA, `insert into assistant_chats (title) values ('Who is out?') returning id`)).rows[0].id;
+await as(SA, `insert into assistant_messages (chat_id, role, content) values ($1,'user','q'),($1,'assistant','a')`, [chat]);
+assert.equal((await as(SA, `select count(*)::int c from assistant_messages`)).rows[0].c, 2);
+assert.equal((await as(AD, `select count(*)::int c from assistant_chats`)).rows[0].c, 0);
+assert.ok(await err(as(AD, `insert into assistant_chats (title) values ('x')`)));
+assert.ok(await err(as(P.asha.uid, `insert into assistant_messages (chat_id, role, content) values ($1,'user','x')`, [chat])));
+assert.equal((await as(P.asha.uid, `select count(*)::int c from assistant_messages`)).rows[0].c, 0);
+assert.ok(await err(as(null, `set local role anon; select * from assistant_chats`)));
+ok('Ask AI chats: Superadmin sees own chats; Admin/employees can’t read or write them');
+
 await checkInvariants('scripted');
 ok(`invariants hold after scripted scenarios${bugs.length ? ` (${bugs.length} issues!)` : ''}`);
 

@@ -60,6 +60,7 @@ Emails sent: auto-approved leave (employee + HR FYI), extra-day request (Superad
    - `NEXT_PUBLIC_VAPID_PUBLIC_KEY` = Public Key
    - `VAPID_PRIVATE_KEY` = Private Key (server only)
    - `VAPID_SUBJECT` = `mailto:hr@editsimple.in`
+   - `OPENAI_API_KEY` = your OpenAI key (Ask AI). Optional: `OPENAI_MODEL` (default `gpt-5.6-terra`)
 3. Redeploy. Superadmins: Dashboard → **Turn on** (or My account → Notifications → Send test).
 
 Superadmins are notified of every extra-day request; employees are notified when theirs is decided. While the portal is open, the custom EditSimple chime plays; when it's closed, the device's normal notification sound is used (browsers don't allow custom sounds for background notifications). iPhone: add the portal to the Home Screen first (iOS 16.4+).

@@ -6,7 +6,7 @@ import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import {
   CalendarCheck2, CalendarDays, CalendarRange, ClipboardCheck, Gift, LayoutDashboard, LogOut, Menu, Scale, Settings2,
-  ShieldCheck, Users, X, type LucideIcon,
+  ShieldCheck, Sparkles, Users, X, type LucideIcon,
 } from 'lucide-react';
 import type { NavGroup, NavIcon } from '@/lib/nav';
 import { ROLE_LABEL, type Role } from '@/lib/types';
@@ -15,7 +15,7 @@ import { signOut } from '@/app/login/actions';
 
 const ICONS: Record<NavIcon, LucideIcon> = {
   dashboard: LayoutDashboard, leave: CalendarCheck2, requests: ClipboardCheck, calendar: CalendarRange, employees: Users,
-  balances: Scale, grants: Gift, holidays: CalendarDays, users: ShieldCheck, account: Settings2,
+  balances: Scale, grants: Gift, holidays: CalendarDays, users: ShieldCheck, account: Settings2, assistant: Sparkles,
 };
 
 type Props = {

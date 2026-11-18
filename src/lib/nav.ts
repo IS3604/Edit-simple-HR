@@ -1,7 +1,7 @@
 import type { Role } from '@/lib/types';
 
 export type NavIcon =
-  | 'dashboard' | 'leave' | 'requests' | 'calendar' | 'employees' | 'balances' | 'grants' | 'holidays' | 'users' | 'account';
+  | 'dashboard' | 'leave' | 'requests' | 'calendar' | 'employees' | 'balances' | 'grants' | 'holidays' | 'users' | 'account' | 'assistant';
 export type NavItem = { href: string; label: string; icon: NavIcon; roles: Role[] };
 export type NavGroup = { label?: string; items: NavItem[] };
 
@@ -12,6 +12,7 @@ export const NAV: NavGroup[] = [
   {
     items: [
       { href: '/', label: 'Dashboard', icon: 'dashboard', roles: ALL },
+      { href: '/assistant', label: 'Ask HR AI', icon: 'assistant', roles: ['superadmin'] },
       { href: '/leave', label: 'My leave', icon: 'leave', roles: ['employee'] },
     ],
   },

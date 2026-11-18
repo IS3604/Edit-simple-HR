@@ -49,3 +49,34 @@
 .login-tick { animation: tick-pop .3s ease-out .75s both; border-radius: 9999px; }
 @keyframes tick-stroke { to { stroke-dashoffset: 0; } }
 @keyframes tick-pop { 50% { transform: scale(1.08); } 100% { transform: scale(1); } }
+
+/* Ask AI markdown */
+.assistant-md > * + * { margin-top: 0.6em; }
+.assistant-md h1, .assistant-md h2, .assistant-md h3 { font-weight: 600; font-size: 15px; }
+.assistant-md ul { list-style: disc; padding-left: 1.25rem; }
+.assistant-md ol { list-style: decimal; padding-left: 1.25rem; }
+.assistant-md li + li { margin-top: 0.2em; }
+.assistant-md strong { font-weight: 600; }
+.assistant-md code { border-radius: 4px; background: #F1ECE6; padding: 0 4px; font-size: 12.5px; }
+.assistant-md table { width: 100%; border-collapse: collapse; font-size: 13px; display: block; overflow-x: auto; }
+.assistant-md th { background: #F3F1EE; text-align: left; font-weight: 500; color: #52525B; }
+.assistant-md th, .assistant-md td { border: 1px solid #E7E3DE; padding: 6px 10px; white-space: nowrap; }
+.assistant-md a { color: #AE4218; text-decoration: underline; }
+
+/* Ask HR AI animations */
+@keyframes ai-step-in { from { opacity: 0; transform: translateY(6px); filter: blur(2px); } to { opacity: 1; transform: none; filter: none; } }
+.ai-step-in { animation: ai-step-in .35s cubic-bezier(.2,.8,.2,1) both; }
+@keyframes ai-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.ai-shimmer {
+  background: linear-gradient(90deg, #71717A 0%, #71717A 35%, #E8622F 50%, #71717A 65%, #71717A 100%);
+  background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent;
+  animation: ai-step-in .35s cubic-bezier(.2,.8,.2,1) both, ai-shimmer 2s linear infinite;
+}
+@keyframes ai-dot { 0%, 80%, 100% { transform: translateY(0); opacity: .4; } 40% { transform: translateY(-5px); opacity: 1; } }
+.ai-dot { animation: ai-dot 1.1s ease-in-out infinite; }
+@keyframes ai-caret { 50% { opacity: 0; } }
+.ai-typing > *:last-child::after {
+  content: ''; display: inline-block; width: 7px; height: 1.05em; margin-left: 2px; vertical-align: -0.15em;
+  border-radius: 2px; background: #E8622F; animation: ai-caret 1s steps(1) infinite;
+}
+@media (prefers-reduced-motion: reduce) { .ai-step-in, .ai-shimmer, .ai-dot, .ai-typing > *:last-child::after { animation: none; } .ai-shimmer { color: #71717A; } }
