@@ -5,7 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { todayIST } from '@/lib/leave-utils';
 import { formatDate } from '@/lib/format';
 import { buildApplyContext, fetchApplyBasics } from '@/lib/apply-context';
-import { REQUEST_COLUMNS, type HrOverview, type LeaveOverview, type LeaveRequest, type LeaveTxn } from '@/lib/types';
+import { LEAVE_SHORT, REQUEST_COLUMNS, type HrOverview, type LeaveOverview, type LeaveRequest, type LeaveTxn } from '@/lib/types';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatGroup } from '@/components/ui/StatGroup';
@@ -18,8 +18,8 @@ import { ActivityList } from '@/components/ActivityList';
 import { WeekStrip, type DayPlan } from '@/components/WeekStrip';
 import { TeamWeekStrip, type TeamDay } from '@/components/TeamWeekStrip';
 import { PushPrompt } from '@/components/PushPrompt';
-import { ApplyDialog } from './leave/ApplyDialog';
 import { DecideForm } from './requests/DecideForm';
+import { EmployeeHero, StaffHero } from '@/components/DashboardHero';
 
 export const metadata = { title: 'Overview' };
 
@@ -34,7 +34,7 @@ export default async function DashboardPage() {
     : <EmployeeDashboard firstName={firstName} employeeId={me.employee?.id} active={me.employee?.status === 'active'} />;
 }
 
-const typeLabel = (t: string) => (t === 'wfh' ? 'WFH' : t === 'casual' ? 'Casual leave' : 'Earned leave');
+const typeLabel = (t: string) => (t === 'wfh' ? 'WFH' : t === 'casual' ? 'Casual leave' : t === 'unpaid' ? 'Unpaid leave' : 'Earned leave');
 const range = (r: LeaveRequest) =>
   `${formatDate(r.start_date)}${r.end_date !== r.start_date ? ` – ${formatDate(r.end_date)}` : ''}${r.half_day ? ` (${r.half_day_session} half)` : ''}`;
 
@@ -93,40 +93,8 @@ async function StaffDashboard({ firstName, myEmployeeId, isSuper }: { firstName:
 
   return (
     <>
-      <section className="relative mb-6 overflow-hidden rounded-xl border border-line bg-white">
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand via-orange-300 to-amber-200" />
-        <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-brand/10 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-32 right-48 h-64 w-64 rounded-full bg-amber-100/60 blur-3xl" />
-        <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.4fr_1fr] lg:items-end">
-          <div>
-            <p className="text-[13px] text-ink-500">{longDate(today)} · {isSuper ? 'Superadmin' : 'Admin'}</p>
-            <h1 className="mt-1 font-display text-[34px] font-medium leading-tight text-ink sm:text-[40px]">{greeting()}, {firstName}</h1>
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-600">{summary} {ask}</p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              {totalPending > 0 && (
-                <Link href="/requests" className="inline-flex h-9 items-center gap-2 rounded-md bg-brand px-3.5 text-sm font-medium text-white hover:bg-brand-600">
-                  Review requests <span className="rounded-full bg-white/25 px-1.5 text-xs">{totalPending}</span>
-                </Link>
-              )}
-              <Link href="/calendar" className="inline-flex h-9 items-center rounded-md border border-line bg-white px-3.5 text-sm font-medium text-ink hover:bg-zinc-50">Team calendar</Link>
-              {isSuper && <Link href="/employees/new" className="inline-flex h-9 items-center rounded-md border border-line bg-white px-3.5 text-sm font-medium text-ink hover:bg-zinc-50">Add employee</Link>}
-            </div>
-          </div>
-          <div className="grid grid-cols-3 overflow-hidden rounded-lg border border-line bg-white/80 backdrop-blur">
-            {[
-              { label: 'In office', value: inOffice, cls: 'text-ink' },
-              { label: 'Away', value: away, cls: away ? 'text-brand-700' : 'text-ink' },
-              { label: 'WFH', value: wfhToday + (hr?.permanent_wfh ?? 0), cls: 'text-sky-800' },
-            ].map((t, i) => (
-              <Link key={t.label} href="/calendar" className={`px-4 py-3.5 transition-colors hover:bg-zinc-50 ${i ? 'border-l border-line' : ''}`}>
-                <p className="text-xs text-ink-500">{t.label}</p>
-                <p className={`mt-1 font-display text-[28px] font-semibold leading-none ${t.cls}`}>{t.value}</p>
-              </Link>
-            ))}
-            <p className="col-span-3 border-t border-line px-4 py-2 text-2xs text-ink-500">Today · WFH includes {hr?.permanent_wfh ?? 0} permanent remote</p>
-          </div>
-        </div>
-      </section>
+      <StaffHero today={today} isSuper={isSuper} firstName={firstName} greeting={greeting()} summary={summary} ask={ask}
+        totalPending={totalPending} inOffice={inOffice} away={away} wfhToday={wfhToday} permanentWfh={hr?.permanent_wfh ?? 0} />
 
       {isSuper && <PushPrompt />}
 
@@ -140,16 +108,16 @@ async function StaffDashboard({ firstName, myEmployeeId, isSuper }: { firstName:
 
       <StatGroup title="Headcount" stats={[
         { label: 'Active employees', value: total, href: '/employees' },
-        { label: 'Office', value: hr?.office ?? 0, href: '/employees?category=office' },
-        { label: 'Hybrid', value: hr?.hybrid ?? 0, href: '/employees?category=hybrid' },
+        { label: 'Office / Hybrid', value: hr?.office ?? 0, href: '/employees?category=office' },
         { label: 'Permanent WFH', value: hr?.permanent_wfh ?? 0, href: '/employees?category=permanent_wfh' },
+        { label: 'Unpaid days this month', value: Number(hr?.unpaid_month ?? 0), href: '/requests?status=approved&kind=unpaid' },
       ]} />
 
       <div className="mt-6 grid items-start gap-6 lg:grid-cols-5">
         <Card className="overflow-hidden lg:col-span-3">
           <CardHeader
             title="Needs a decision"
-            description={totalPending ? `${totalPending} request${totalPending === 1 ? '' : 's'} beyond balance` : undefined}
+            description={totalPending ? `${totalPending} request${totalPending === 1 ? '' : 's'} · extra WFH or unpaid leave` : undefined}
             action={totalPending > pending.length ? <Link href="/requests" className="inline-flex items-center gap-1 text-[13px] font-medium text-brand-700 hover:underline">All requests <ArrowRight className="h-3.5 w-3.5" /></Link> : undefined}
           />
           {pending.length === 0 ? (
@@ -184,7 +152,7 @@ async function StaffDashboard({ firstName, myEmployeeId, isSuper }: { firstName:
                   {b.rows.map((r) => (
                     <li key={r.id} className="flex items-center justify-between gap-3 px-5 py-2.5">
                       <PersonCell name={r.employee?.full_name ?? '—'} href={r.employee ? `/employees/${r.employee.id}` : undefined} sub={range(r)} />
-                      <Badge tone={r.leave_type === 'wfh' ? 'neutral' : r.leave_type === 'casual' ? 'brand' : 'info'}>{r.leave_type === 'wfh' ? 'WFH' : r.leave_type === 'casual' ? 'CL' : 'EL'}</Badge>
+                      <Badge tone={r.leave_type === 'wfh' ? 'neutral' : r.leave_type === 'casual' ? 'brand' : r.leave_type === 'unpaid' ? 'danger' : 'info'}>{LEAVE_SHORT[r.leave_type]}</Badge>
                     </li>
                   ))}
                 </ul>
@@ -264,44 +232,8 @@ async function EmployeeDashboard({ firstName, employeeId, active }: { firstName:
 
   return (
     <>
-      <section className="relative mb-6 overflow-hidden rounded-xl border border-line bg-white">
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand via-orange-300 to-amber-200" />
-        <div aria-hidden className="pointer-events-none absolute -right-20 -top-28 h-72 w-72 rounded-full bg-brand/10 blur-3xl" />
-        <div aria-hidden className="pointer-events-none absolute -bottom-32 right-40 h-64 w-64 rounded-full bg-amber-100/60 blur-3xl" />
-        <div className="relative grid gap-6 p-6 sm:p-8 lg:grid-cols-[1.5fr_1fr] lg:items-end">
-          <div>
-            <p className="text-[13px] text-ink-500">{longDate(today)}</p>
-            <h1 className="mt-1 font-display text-[34px] font-medium leading-tight text-ink sm:text-[40px]">
-              {greeting()}, {firstName}
-            </h1>
-            <p className="mt-3 max-w-xl text-[15px] leading-relaxed text-ink-600">
-              {todayText} You have {parts.slice(0, -1).join(', ')}{parts.length > 1 ? ' and ' : ''}{parts[parts.length - 1]}.
-            </p>
-            <div className="mt-5 flex flex-wrap items-center gap-2">
-              <ApplyDialog ctx={ctx} disabled={!active} />
-              <Link href="/calendar" className="inline-flex h-9 items-center rounded-md border border-line bg-white px-3.5 text-sm font-medium text-ink hover:bg-zinc-50">Team calendar</Link>
-              <span className="hidden text-xs text-ink-400 sm:inline">Tip: press <kbd className="rounded border border-line bg-zinc-50 px-1 font-mono text-[11px]">N</kbd> to apply</span>
-            </div>
-          </div>
-          {nextHoliday && (
-            <Link href="/holidays" className="group rounded-lg border border-line bg-white/80 p-4 backdrop-blur transition-colors hover:border-ink-300">
-              <p className="text-xs font-medium text-ink-500">Next holiday</p>
-              <div className="mt-2 flex items-center gap-3">
-                <div className="grid w-12 shrink-0 overflow-hidden rounded-md border border-line text-center leading-none">
-                  <span className="bg-brand py-1 text-2xs font-semibold uppercase text-white">
-                    {new Date(`${nextHoliday.holiday_date}T00:00:00Z`).toLocaleString('en-IN', { month: 'short', timeZone: 'UTC' })}
-                  </span>
-                  <span className="py-1.5 font-display text-lg font-semibold">{new Date(`${nextHoliday.holiday_date}T00:00:00Z`).getUTCDate()}</span>
-                </div>
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-ink">{nextHoliday.name}</p>
-                  <p className="text-xs text-ink-500">{inDays === 0 ? 'Today' : inDays === 1 ? 'Tomorrow' : `In ${inDays} days`}</p>
-                </div>
-              </div>
-            </Link>
-          )}
-        </div>
-      </section>
+      <EmployeeHero today={today} firstName={firstName} greeting={greeting()} sentence={`${todayText} You have ${parts.slice(0, -1).join(', ')}${parts.length > 1 ? ' and ' : ''}${parts[parts.length - 1]}.`}
+        ctx={ctx} active={active} nextHoliday={nextHoliday ?? null} inDays={inDays} />
 
       <PushPrompt compact />
 

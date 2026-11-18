@@ -5,16 +5,17 @@ import { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Home, PartyPopper, Plane, Sun, Users } from 'lucide-react';
 import { Avatar } from '@/components/ui/Avatar';
 
-export type Kind = 'casual' | 'earned' | 'wfh' | 'leave';
+export type Kind = 'casual' | 'earned' | 'wfh' | 'leave' | 'unpaid';
 export type Entry = { employee_id: string | null; full_name: string; leave_type: Kind; start_date: string; end_date: string; half_day: boolean; half_day_session: string | null };
 
 const KIND: Record<Kind, { label: string; badge: string; ring: string; dot: string }> = {
   casual: { label: 'Casual leave', badge: 'bg-brand-50 text-brand-700 ring-brand-200', ring: 'ring-brand', dot: 'bg-brand' },
   earned: { label: 'Earned leave', badge: 'bg-violet-50 text-violet-700 ring-violet-200', ring: 'ring-violet-500', dot: 'bg-violet-500' },
   leave: { label: 'On leave', badge: 'bg-brand-50 text-brand-700 ring-brand-200', ring: 'ring-brand', dot: 'bg-brand' },
+  unpaid: { label: 'Unpaid leave', badge: 'bg-rose-50 text-rose-700 ring-rose-200', ring: 'ring-rose-500', dot: 'bg-rose-500' },
   wfh: { label: 'Working from home', badge: 'bg-sky-50 text-sky-700 ring-sky-200', ring: 'ring-sky-500', dot: 'bg-sky-500' },
 };
-const SHORT: Record<Kind, string> = { casual: 'CL', earned: 'EL', leave: 'Leave', wfh: 'WFH' };
+const SHORT: Record<Kind, string> = { casual: 'CL', earned: 'EL', leave: 'Leave', wfh: 'WFH', unpaid: 'Unpaid' };
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const parse = (iso: string) => new Date(`${iso}T00:00:00Z`);
 
@@ -156,7 +157,7 @@ export function CalendarView({
             })}
           </div>
           <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-line px-4 py-2.5 text-xs text-ink-500">
-            {(staff ? (['casual', 'earned', 'wfh'] as Kind[]) : (['leave', 'wfh'] as Kind[])).map((k) => (
+            {(staff ? (['casual', 'earned', 'unpaid', 'wfh'] as Kind[]) : (['leave', 'wfh'] as Kind[])).map((k) => (
               <span key={k} className="inline-flex items-center gap-1.5"><span className={`h-2 w-2 rounded-full ${KIND[k].dot}`} />{KIND[k].label}</span>
             ))}
             <span className="inline-flex items-center gap-1.5"><PartyPopper className="h-3 w-3 text-amber-700" />Holiday</span>

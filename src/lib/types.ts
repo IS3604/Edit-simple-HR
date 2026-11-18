@@ -26,12 +26,13 @@ export type ActionState = { error?: string; success?: string } | undefined;
 export type EmployeeCategory = 'permanent_wfh' | 'office' | 'hybrid';
 export type EmployeeStatus = 'active' | 'inactive';
 
-export const CATEGORIES: EmployeeCategory[] = ['office', 'hybrid', 'permanent_wfh'];
+/** Selectable categories. 'hybrid' is legacy (merged into 'office' in 0014). */
+export const CATEGORIES: EmployeeCategory[] = ['office', 'permanent_wfh'];
 
 export const CATEGORY_LABEL: Record<EmployeeCategory, string> = {
   permanent_wfh: 'Permanent WFH',
-  office: 'Office',
-  hybrid: 'Hybrid',
+  office: 'Office / Hybrid',
+  hybrid: 'Office / Hybrid',
 };
 
 export type Employee = {
@@ -50,11 +51,13 @@ export type Employee = {
 export const EMPLOYEE_COLUMNS =
   'id, profile_id, employee_code, full_name, email, department, designation, joining_date, category, status';
 
-export type LeaveType = 'casual' | 'earned' | 'wfh';
+export type LeaveType = 'casual' | 'earned' | 'wfh' | 'unpaid';
+/** Types that have a balance (unpaid has none). */
+export type BalanceType = 'casual' | 'earned' | 'wfh';
 export type TxnKind = 'monthly_credit' | 'special_grant' | 'debit' | 'expiry' | 'adjustment';
 
-export const LEAVE_LABEL: Record<LeaveType, string> = { casual: 'Casual Leave', earned: 'Earned Leave', wfh: 'WFH' };
-export const LEAVE_SHORT: Record<LeaveType, string> = { casual: 'CL', earned: 'EL', wfh: 'WFH' };
+export const LEAVE_LABEL: Record<LeaveType, string> = { casual: 'Casual Leave', earned: 'Earned Leave', wfh: 'WFH', unpaid: 'Unpaid Leave' };
+export const LEAVE_SHORT: Record<LeaveType, string> = { casual: 'CL', earned: 'EL', wfh: 'WFH', unpaid: 'Unpaid' };
 export const TXN_LABEL: Record<TxnKind, string> = {
   monthly_credit: 'Monthly credit',
   special_grant: 'Special grant',
@@ -80,6 +83,9 @@ export type LeaveOverview = {
   pending_casual: number;
   pending_earned: number;
   pending_wfh: number;
+  pending_unpaid: number;
+  unpaid_month: number;
+  unpaid_year: number;
 };
 
 export type LeaveTxn = {
@@ -129,4 +135,5 @@ export const REQUEST_COLUMNS =
 export type HrOverview = {
   total: number; permanent_wfh: number; office: number; hybrid: number;
   on_leave_today: number; wfh_today: number; pending_leave: number; pending_wfh: number; today: string;
+  pending_unpaid?: number; unpaid_month?: number;
 };

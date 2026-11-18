@@ -110,7 +110,7 @@ async function pushFor(r: RequestInfo, event: NotifyEvent) {
   const what = `${LEAVE_SHORT[r.leave_type]} · ${dateText(r)} · ${fmtDays(r.days)} day${Number(r.days) === 1 ? '' : 's'}`;
   const emp = r.employee?.profile_id;
   if (event === 'extra_requested') {
-    await pushToRoles(['superadmin'], { title: `Action needed: ${who} requested extra days`, body: `${what}${r.reason ? ` — “${r.reason}”` : ''}`, url: '/requests', tag: `req-${r.id}` });
+    await pushToRoles(['superadmin'], { title: r.leave_type === 'unpaid' ? `Action needed: ${who} requested unpaid leave` : `Action needed: ${who} requested extra days`, body: `${what}${r.reason ? ` — “${r.reason}”` : ''}`, url: '/requests', tag: `req-${r.id}` });
   } else if (event === 'auto_approved') {
     await pushToRoles(['superadmin'], { title: `${who} · ${r.leave_type === 'wfh' ? 'WFH' : 'leave'} booked`, body: `${what} — auto-approved (within balance)`, url: '/calendar', tag: `req-${r.id}` });
   } else if (event === 'cancelled') {
@@ -133,13 +133,14 @@ async function emailFor(r: RequestInfo, event: NotifyEvent, refunded: number) {
         layout(`${who} will be ${r.leave_type === 'wfh' ? 'working from home' : 'on leave'}`, baseRows(r), { label: 'Open dashboard', path: '/' }, 'Auto-approved (within balance). No action needed.'));
       break;
     case 'extra_requested':
-      await send(await staffEmails(['superadmin']), `Action needed: ${who} requested extra ${LEAVE_LABEL[r.leave_type]}`,
-        layout('Extra-day request needs your decision', baseRows(r), { label: 'Review request', path: '/requests' }, 'This request goes beyond the employee’s available balance.'));
+      await send(await staffEmails(['superadmin']), r.leave_type === 'unpaid' ? `Action needed: ${who} requested Unpaid Leave` : `Action needed: ${who} requested extra ${LEAVE_LABEL[r.leave_type]}`,
+        layout(r.leave_type === 'unpaid' ? 'Unpaid leave needs your decision' : 'Extra-day request needs your decision', baseRows(r), { label: 'Review request', path: '/requests' },
+          r.leave_type === 'unpaid' ? 'Salary is deducted for approved unpaid days.' : 'This request goes beyond the employee’s available balance.'));
       break;
     case 'approved':
       await send(emp, `Approved: ${LEAVE_LABEL[r.leave_type]} on ${dateText(r)}`,
         layout('Your request was approved', [...baseRows(r),
-          ...(Number(r.extra_days) > 0 ? [['Beyond balance', `${fmtDays(r.extra_days)} day(s) — deducted, balance went negative`] as [string, string]] : []),
+          ...(Number(r.extra_days) > 0 ? [['Beyond balance', `${fmtDays(r.extra_days)} day(s) — deducted, WFH went negative`] as [string, string]] : []),
           ...(r.decision_note ? [['Note', r.decision_note] as [string, string]] : [])], { label: 'View my leave', path: '/leave' }));
       break;
     case 'rejected':

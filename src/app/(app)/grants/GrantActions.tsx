@@ -12,7 +12,7 @@ import { days as fmtDays } from '@/lib/format';
 import { LEAVE_LABEL, type LeaveType } from '@/lib/types';
 import { editGrant, revokeGrant } from './actions';
 
-type Grant = { id: string; leave_type: LeaveType; days: number; reason: string; employeeName: string };
+type Grant = { id: string; leave_type: LeaveType; days: number; reason: string; employeeName: string; balance: number };
 
 export function GrantActions({ grant }: { grant: Grant }) {
   const [editOpen, setEditOpen] = useState(false);
@@ -24,6 +24,11 @@ export function GrantActions({ grant }: { grant: Grant }) {
   useActionToast(revokeState);
   useEffect(() => { if (editState?.success) setEditOpen(false); }, [editState]);
   useEffect(() => { if (revokeState) setRevokeOpen(false); }, [revokeState]);
+  const isDeduction = Number(grant.days) < 0;
+  const size = Math.abs(Number(grant.days));
+  const unused = Math.min(size, Math.max(0, grant.balance));
+  const used = size - unused;
+  const label = LEAVE_LABEL[grant.leave_type];
 
   return (
     <div className="flex justify-end gap-1">
@@ -38,14 +43,15 @@ export function GrantActions({ grant }: { grant: Grant }) {
         </Button>
       </form>
 
-      <Modal open={editOpen} onClose={() => setEditOpen(false)} title="Edit grant"
-        description={`${grant.employeeName} · ${LEAVE_LABEL[grant.leave_type]}`} size="sm">
+      <Modal open={editOpen} onClose={() => setEditOpen(false)} title={isDeduction ? 'Edit deduction' : 'Edit grant'}
+        description={`${grant.employeeName} · ${label}`} size="sm">
         <form action={editAction} className="space-y-4">
           <input type="hidden" name="id" value={grant.id} />
+          <input type="hidden" name="sign" value={isDeduction ? '-' : '+'} />
           <div>
-            <label htmlFor={`days-${grant.id}`} className="label">Days</label>
-            <input id={`days-${grant.id}`} name="days" type="number" min={0.5} max={31} step={0.5} required defaultValue={Number(grant.days)} className="input" />
-            <p className="hint">The difference is added to or removed from the balance. Days already used can’t be taken back.</p>
+            <label htmlFor={`days-${grant.id}`} className="label">{isDeduction ? 'Days deducted' : 'Days granted'}</label>
+            <input id={`days-${grant.id}`} name="days" type="number" min={0.5} max={31} step={0.5} required defaultValue={size} className="input" />
+            <p className="hint">The difference is added to or removed from the balance. The balance can’t go below 0.</p>
           </div>
           <div>
             <label htmlFor={`reason-${grant.id}`} className="label">Reason</label>
@@ -60,8 +66,17 @@ export function GrantActions({ grant }: { grant: Grant }) {
       </Modal>
 
       <ConfirmDialog open={revokeOpen} onClose={() => setRevokeOpen(false)} onConfirm={() => submitForm(revokeForm.current)}
-        loading={revoking} danger title="Revoke this grant?" confirmLabel="Revoke grant"
-        message={<>This removes <strong>{fmtDays(grant.days)} {LEAVE_LABEL[grant.leave_type]}</strong> from {grant.employeeName}’s balance. The grant stays in the history as revoked.</>} />
+        loading={revoking} danger title={isDeduction ? 'Revoke this deduction?' : 'Revoke this grant?'} confirmLabel="Revoke"
+        message={isDeduction ? (
+          <>This gives <strong>{fmtDays(size)} {label}</strong> back to {grant.employeeName}.</>
+        ) : used > 0 ? (
+          <span className="block space-y-2">
+            <span className="block">{grant.employeeName} has already used <strong>{fmtDays(used)} of {fmtDays(size)}</strong> days (leave is booked or taken).</span>
+            <span className="block">Revoking takes back the <strong>{fmtDays(unused)} unused</strong> day(s) now. Booked leave stays approved — if it’s cancelled later, those days are taken back too. The balance never goes below 0.</span>
+          </span>
+        ) : (
+          <>This removes <strong>{fmtDays(size)} {label}</strong> from {grant.employeeName}’s balance. The grant stays in the history as revoked.</>
+        )} />
     </div>
   );
 }

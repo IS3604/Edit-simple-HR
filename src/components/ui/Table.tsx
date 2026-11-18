@@ -13,7 +13,7 @@ export function Th({ children, align = 'left', className = '' }: { children?: Re
   return (
     <th
       scope="col"
-      className={`sticky top-0 border-b border-line bg-zinc-50/80 px-4 py-2.5 text-xs font-medium text-ink-500 first:rounded-tl-xl last:rounded-tr-xl ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}
+      className={`sticky top-0 border-b border-line bg-[#F8F6F3] px-4 py-2.5 text-xs font-medium text-ink-500 first:rounded-tl-xl last:rounded-tr-xl ${align === 'right' ? 'text-right' : 'text-left'} ${className}`}
     >
       {children}
     </th>

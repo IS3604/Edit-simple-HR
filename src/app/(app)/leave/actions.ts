@@ -9,7 +9,7 @@ import { notifyRequest } from '@/lib/email';
 import { days as fmtDays } from '@/lib/format';
 import type { ActionState, LeaveType } from '@/lib/types';
 
-const TYPES: LeaveType[] = ['casual', 'earned', 'wfh'];
+const TYPES: LeaveType[] = ['casual', 'earned', 'wfh', 'unpaid'];
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function refresh() {
@@ -29,7 +29,7 @@ export async function applyLeave(_prev: ActionState, fd: FormData): Promise<Acti
   if (!TYPES.includes(type)) return { error: 'Choose a leave type.' };
   if (!DATE_RE.test(start) || !DATE_RE.test(end)) return { error: 'Choose valid dates.' };
   if (reason.length > 500) return { error: 'Reason must be under 500 characters.' };
-  if (raise && !reason) return { error: 'Add a reason for the extra days.' };
+  if ((raise || type === 'unpaid') && !reason) return { error: 'Add a reason for HR.' };
 
   const supabase = await createClient();
   const { data, error } = await supabase.rpc('apply_leave', {
@@ -44,7 +44,7 @@ export async function applyLeave(_prev: ActionState, fd: FormData): Promise<Acti
   return {
     success: result.status === 'approved'
       ? `Approved — ${fmtDays(result.days)} day${Number(result.days) === 1 ? '' : 's'} deducted from your balance.`
-      : 'Request sent to HR for approval.',
+      : type === 'unpaid' ? 'Unpaid leave request sent to HR for approval.' : 'Request sent to HR for approval.',
   };
 }
 
@@ -55,7 +55,7 @@ export async function cancelRequest(_prev: ActionState, fd: FormData): Promise<A
   const { data, error } = await supabase.rpc('cancel_request', { p_id: id });
   if (error) return { error: friendlyDbError(error) };
 
-  const res = data as { refunded: number; was: string };
+  const res = data as { refunded: number; clawed_back?: number; was: string };
   if (res.was === 'approved') after(() => notifyRequest(id, 'cancelled', Number(res.refunded)));
   refresh();
   return {

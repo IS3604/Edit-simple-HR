@@ -10,6 +10,7 @@
     "test:db": "node tests/db-foundation.test.mjs",
     "create-superadmin": "tsx scripts/create-superadmin.mts",
     "test:scenarios": "node tests/scenarios.test.mjs",
+    "test:upgrade": "node tests/upgrade-v2.test.mjs",
     "test:push": "NODE_TLS_REJECT_UNAUTHORIZED=0 tsx --conditions=react-server tests/push.sim.mts"
   },
   "dependencies": {

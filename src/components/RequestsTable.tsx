@@ -9,7 +9,7 @@ import { LEAVE_SHORT, STATUS_LABEL, type LeaveRequest, type RequestStatus } from
 const statusTone: Record<RequestStatus, 'warning' | 'success' | 'danger' | 'muted'> = {
   pending: 'warning', approved: 'success', rejected: 'danger', cancelled: 'muted',
 };
-const typeTone = { casual: 'brand', earned: 'info', wfh: 'neutral' } as const;
+const typeTone = { casual: 'brand', earned: 'info', wfh: 'neutral', unpaid: 'danger' } as const;
 
 export function RequestsTable({
   rows,
@@ -61,6 +61,7 @@ export function RequestsTable({
               <Td align="right" className="font-medium">
                 {days(r.days)}
                 {Number(r.extra_days) > 0 && <span className="block text-xs font-normal text-amber-700">{days(r.extra_days)} beyond balance</span>}
+                {r.leave_type === 'unpaid' && <span className="block text-xs font-normal text-red-700">Salary deducted</span>}
               </Td>
               <Td className="max-w-[240px] text-ink-600">
                 <span className="line-clamp-2" title={r.reason || undefined}>{r.reason || <span className="text-ink-400">—</span>}</span>
@@ -70,6 +71,7 @@ export function RequestsTable({
                   <Badge tone={statusTone[r.status]} dot>{STATUS_LABEL[r.status]}</Badge>
                   {r.auto_approved && r.status === 'approved' && <Badge tone="muted">Auto</Badge>}
                   {r.is_extra && r.status === 'pending' && <Badge tone="brand">Extra days</Badge>}
+                  {r.leave_type === 'unpaid' && r.status === 'pending' && <Badge tone="danger">Needs approval</Badge>}
                 </div>
                 {!r.auto_approved && (r.decision_note || r.decider?.full_name) && (
                   <p className="mt-1 max-w-[220px] text-xs text-ink-500">

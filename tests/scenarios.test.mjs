@@ -97,11 +97,11 @@ async function persona(key, { name, role = 'employee', category, joined, alloc }
   return P[key];
 }
 await persona('ishpreet', { name: 'Ishpreet Singh', role: 'superadmin', category: 'office', joined: '2024-04-01', alloc: [1, 1.5, 2] });
-await persona('neha', { name: 'Neha Admin', role: 'admin', category: 'hybrid', joined: '2025-01-10', alloc: [1, 1.5, 4] });
+await persona('neha', { name: 'Neha Admin', role: 'admin', category: 'office', joined: '2025-01-10', alloc: [1, 1.5, 4] });
 await persona('asha', { name: 'Asha Rao', category: 'office', joined: '2025-06-01', alloc: [1.5, 1.5, 2] });
-await persona('ravi', { name: 'Ravi Kumar', category: 'hybrid', joined: '2024-02-15', alloc: [1, 2, 8] });
+await persona('ravi', { name: 'Ravi Kumar', category: 'office', joined: '2024-02-15', alloc: [1, 2, 8] });
 await persona('zoya', { name: 'Zoya Khan', category: 'permanent_wfh', joined: '2025-09-01', alloc: [1, 1.5, 5] });
-await persona('kabir', { name: 'Kabir Mehta', category: 'hybrid', joined: '2026-03-17', alloc: [1, 1, 4] });
+await persona('kabir', { name: 'Kabir Mehta', category: 'office', joined: '2026-03-17', alloc: [1, 1, 4] });
 await persona('meera', { name: 'Meera Iyer', category: 'office', joined: '2023-01-01', alloc: [1, 2.5, 0] });
 await persona('arjun', { name: 'Arjun Das', category: 'office', joined: '2025-01-01', alloc: [1, 1.5, 1] });
 const SA = P.ishpreet.uid, AD = P.neha.uid;
@@ -158,7 +158,7 @@ async function checkInvariants(label) {
   const i4 = (await sys(`
     select r.id, r.days::float, r.extra_days::float, count(t.id) n, sum(t.amount)::float amt
     from leave_requests r left join leave_transactions t on t.request_id=r.id and t.kind='debit'
-    where r.status='approved' group by r.id having count(t.id) <> 1 or sum(t.amount) <> -r.days`)).rows;
+    where r.status='approved' and r.leave_type::text <> 'unpaid' group by r.id having count(t.id) <> 1 or sum(t.amount) <> -r.days`)).rows;
   if (i4.length) bug(`[${label}] I4 approved request debit mismatch`, i4);
   // I5 at most one debit and one refund per request; refunds only on cancelled
   const i5 = (await sys(`
@@ -172,8 +172,21 @@ async function checkInvariants(label) {
   if (i7.length) bug(`[${label}] I7 EL monthly credit exceeded cap`, i7);
   // I8 WFH monthly credit never carries a positive leftover (a shortfall may reduce it)
   const i8 = (await sys(`select id, amount::float, balance_after::float from leave_transactions where kind='monthly_credit' and leave_type='wfh' and balance_after > amount`)).rows;
-  // I9 floors: CL/EL never below -10, WFH never below -4
-  const i9 = (await sys(`select employee_id from leave_balances where casual < -10 or earned < -10 or wfh < -4`)).rows;
+  // I9 floors (policy v2): CL/EL never below 0, WFH never below -10
+  const i9 = (await sys(`select employee_id from leave_balances where casual < 0 or earned < 0 or wfh < -10`)).rows;
+  const i9b = (await sys(`select id from leave_transactions where (leave_type <> 'wfh' and balance_after < 0) or balance_after < -10`)).rows;
+  if (i9b.length) bug(`[${label}] I9b ledger line below floor`, i9b);
+  // I18 unpaid leave never touches the ledger; approved unpaid has no extra_days
+  const i18 = (await sys(`select t.id from leave_transactions t join leave_requests r on r.id=t.request_id where r.leave_type::text='unpaid'`)).rows;
+  if (i18.length) bug(`[${label}] I18 unpaid leave hit the ledger`, i18);
+  // I19 revoked grants: the ledger lines linked to a grant sum to (days - taken back) for positive grants
+  const i19 = (await sys(`select g.id, g.days::float, g.revoked_days::float, sum(t.amount)::float s from special_grants g
+    join leave_transactions t on t.grant_id=g.id where g.revoked_at is not null
+    group by g.id having sum(t.amount) <> g.days - sign(g.days) * coalesce(g.revoked_days,0)`)).rows;
+  if (i19.length) bug(`[${label}] I19 revoked grant ledger mismatch`, i19);
+  // I20 no hybrid employees
+  const i20 = (await sys(`select id from employees where category::text='hybrid'`)).rows;
+  if (i20.length) bug(`[${label}] I20 hybrid employee exists`, i20);
   if (i9.length) bug(`[${label}] I9 balance below floor`, i9);
   if (i8.length) bug(`[${label}] I8 WFH carried forward`, i8);
   // I10 permanent WFH employees never have WFH requests
@@ -185,7 +198,7 @@ async function checkInvariants(label) {
   // Note: holidays are fixed in this sim, so this must hold.
   if (i13.length) bug(`[${label}] I13 days != working days`, i13);
   // I14 pending requests are all extra-day requests
-  const i14 = (await sys(`select id from leave_requests where status='pending' and not is_extra`)).rows;
+  const i14 = (await sys(`select id from leave_requests where status='pending' and not is_extra and leave_type::text <> 'unpaid'`)).rows;
   if (i14.length) bug(`[${label}] I14 non-extra pending request`, i14);
   // I15 no request before joining date
   const i15 = (await sys(`select r.id from leave_requests r join employees e on e.id=r.employee_id where r.start_date < e.joining_date`)).rows;
@@ -218,10 +231,10 @@ ok('daily cron re-runs on 1 Jan do not double-credit');
 
 TODAY = '2026-01-05'; // Monday
 let e = await err(apply(P.asha, 'casual', '2026-01-06', '2026-01-07'));
-assert.match(e?.message ?? '', /Raise a request/);
+assert.match(e?.message ?? '', /Unpaid leave/);
 let r = await apply(P.asha, 'casual', '2026-01-06', '2026-01-06', { reason: 'Dentist' });
 assert.equal(r.status, 'approved'); assert.equal((await bal(P.asha)).c, 0.5);
-ok('Asha: 2 days with 1.5 balance blocked; 1 day auto-approved and deducted');
+ok('Asha: 2 CL with 1.5 balance blocked (suggests Unpaid); 1 day auto-approved and deducted');
 
 r = await apply(P.asha, 'casual', '2026-01-07', '2026-01-07', { half: true, session: 'first' });
 assert.equal(r.status, 'approved'); assert.equal((await bal(P.asha)).c, 0);
@@ -229,19 +242,42 @@ e = await err(apply(P.asha, 'casual', '2026-01-07', '2026-01-07', { half: true, 
 assert.match(e?.message ?? '', /overlap/);
 ok('Asha: half-day uses 0.5; second half on same date is blocked (known limitation)');
 
-e = await err(apply(P.asha, 'casual', '2026-01-08', '2026-01-09', { raise: true }));
+e = await err(apply(P.asha, 'casual', '2026-01-08', '2026-01-09', { raise: true, reason: 'Family function' }));
+assert.match(e?.message ?? '', /Unpaid leave/);
+assert.equal((await bal(P.asha)).c, 0);
+ok('Asha: CL beyond balance can no longer be "raised" — CL never goes negative');
+
+e = await err(apply(P.asha, 'unpaid', '2026-01-08', '2026-01-09'));
 assert.match(e?.message ?? '', /reason/);
-const extra1 = await apply(P.asha, 'casual', '2026-01-08', '2026-01-09', { raise: true, reason: 'Family function' });
-assert.equal(extra1.status, 'pending');
-e = await err(as(AD, `select decide_request($1, true, '')`, [extra1.id]));
+const up1 = await apply(P.asha, 'unpaid', '2026-01-08', '2026-01-09', { reason: 'Family function' });
+assert.equal(up1.status, 'pending'); assert.equal(+up1.days, 2);
+e = await err(as(AD, `select decide_request($1, true, '')`, [up1.id]));
 assert.match(e?.message ?? '', /Only a Superadmin/);
-e = await err(as(P.asha.uid, `select decide_request($1, true, '')`, [extra1.id]));
+e = await err(as(P.asha.uid, `select decide_request($1, true, '')`, [up1.id]));
 assert.ok(e);
-await as(SA, `select decide_request($1, true, 'ok')`, [extra1.id]);
-const x1 = (await sys(`select status, extra_days::float from leave_requests where id=$1`, [extra1.id])).rows[0];
-assert.deepEqual([x1.status, x1.extra_days], ['approved', 2]);
-assert.equal((await bal(P.asha)).c, -2);
-ok('Asha: extra-day request needs reason; Admin/employee cannot decide; HR approves → balance −2 (owed)');
+const ledgerBefore = (await sys(`select count(*)::int c from leave_transactions where employee_id=$1`, [P.asha.emp])).rows[0].c;
+await as(SA, `select decide_request($1, true, 'ok, salary deducted')`, [up1.id]);
+const x1 = (await sys(`select status from leave_requests where id=$1`, [up1.id])).rows[0];
+assert.equal(x1.status, 'approved');
+assert.deepEqual([(await bal(P.asha)).c, (await bal(P.asha)).e], [0, 1.5]);
+assert.equal((await sys(`select count(*)::int c from leave_transactions where employee_id=$1`, [P.asha.emp])).rows[0].c, ledgerBefore);
+const ov = (await as(SA, `select unpaid_month::float m, unpaid_year::float y from leave_overview where employee_id=$1`, [P.asha.emp])).rows[0];
+assert.deepEqual([ov.m, ov.y], [2, 2]);
+const hro = (await as(SA, `select hr_overview() j`)).rows[0].j;
+assert.equal(+hro.unpaid_month, 2);
+ok('Unpaid leave: needs reason, always pending, only Superadmin approves, no balance change, counted for salary (2 days)');
+
+const up2 = await apply(P.asha, 'unpaid', '2026-01-19', '2026-01-19', { reason: 'Personal' });
+const scal = (await as(SA, `select leave_type from team_calendar('2026-01-01','2026-01-31') where full_name='Asha Rao'`)).rows.map((x) => x.leave_type);
+assert.ok(scal.includes('unpaid'));
+await as(SA, `select decide_request($1, true, '')`, [up2.id]);
+const cu = (await as(P.asha.uid, `select cancel_request($1) j`, [up2.id])).rows[0].j;
+assert.equal(+cu.refunded, 0);
+ok('Unpaid leave shows on staff calendar; cancelling approved unpaid works with nothing to refund');
+
+e = await err(as(SA, `insert into employees (employee_code, full_name, email, joining_date, category) values ('X1','X','x@editsimple.in','2026-01-01','hybrid')`));
+assert.match(e?.message ?? '', /two_categories/);
+ok('only two categories: Office/Hybrid and Permanent WFH ("hybrid" rejected)');
 
 e = await err(apply(P.zoya, 'wfh', '2026-01-06', '2026-01-06'));
 assert.match(e?.message ?? '', /Permanent WFH/);
@@ -312,6 +348,51 @@ e = await err(as(AD, `select grant_special($1, 'earned', 3, 'x')`, [P.asha.emp])
 assert.ok(e);
 ok('Superadmin grants 3 EL comp-off; Admin cannot grant');
 
+// Grant 10 EL, employee uses 8, then HR revokes → only the unused part comes back
+await as(SA, `select grant_special($1, 'earned', 10, 'Project bonus')`, [P.meera.emp]);
+assert.equal((await bal(P.meera)).e, 12.5);
+const g10 = (await sys(`select id from special_grants where employee_id=$1 and days=10`, [P.meera.emp])).rows[0].id;
+const ml = await apply(P.meera, 'earned', '2026-02-02', '2026-02-11');
+assert.equal(ml.status, 'approved'); assert.equal(+ml.days, 8); assert.equal((await bal(P.meera)).e, 4.5);
+const rv = (await as(SA, `select revoke_special_grant($1) j`, [g10])).rows[0].j;
+assert.deepEqual([+rv.taken_back, +rv.already_used], [4.5, 5.5]);
+assert.equal((await bal(P.meera)).e, 0);
+assert.equal((await sys(`select status from leave_requests where id=$1`, [ml.id])).rows[0].status, 'approved');
+e = await err(as(SA, `select revoke_special_grant($1)`, [g10]));
+assert.match(e?.message ?? '', /already revoked/);
+ok('Grant 10 EL → employee books 8 → revoke takes back the unused 4.5 (5.5 already used stay approved); balance 0, never negative');
+
+const mc = (await as(P.meera.uid, `select cancel_request($1) j`, [ml.id])).rows[0].j;
+assert.deepEqual([+mc.refunded, +mc.clawed_back], [2.5, 5.5]); assert.equal((await bal(P.meera)).e, 2.5);
+assert.equal(+(await sys(`select revoked_days::float r from special_grants where id=$1`, [g10])).rows[0].r, 10);
+ok('…if she then cancels that leave, only her own 2.5 days come back; the 5.5 grant days are clawed back (no loophole)');
+
+// Deductions (negative grants)
+await as(SA, `select grant_special($1, 'earned', -2, 'Unauthorised absence')`, [P.asha.emp]);
+assert.equal((await bal(P.asha)).e, 2.5);
+e = await err(as(SA, `select grant_special($1, 'earned', -5, 'x')`, [P.asha.emp]));
+assert.match(e?.message ?? '', /only 2.5 available/);
+e = await err(as(AD, `select grant_special($1, 'earned', -1, 'x')`, [P.asha.emp]));
+assert.ok(e);
+e = await err(as(SA, `select grant_special($1, 'unpaid', 1, 'x')`, [P.asha.emp]));
+assert.match(e?.message ?? '', /no balance/);
+const gd = (await sys(`select id from special_grants where employee_id=$1 and days=-2`, [P.asha.emp])).rows[0].id;
+e = await err(as(SA, `select update_special_grant($1, 2, 'flip')`, [gd]));
+assert.match(e?.message ?? '', /deduction/);
+await as(SA, `select update_special_grant($1, -1, 'Unauthorised absence (half)')`, [gd]);
+assert.equal((await bal(P.asha)).e, 3.5);
+const rd = (await as(SA, `select revoke_special_grant($1) j`, [gd])).rows[0].j;
+assert.equal(+rd.taken_back, 1); assert.equal((await bal(P.asha)).e, 4.5);
+ok('Deduct: −2 EL; can’t deduct more than available; Admin can’t; edit −2→−1; revoke returns the day');
+
+// Edit a positive grant down only as far as unused
+await as(SA, `select grant_special($1, 'casual', 3, 'Festival')`, [P.ravi.emp]);
+const gr = (await sys(`select id from special_grants where employee_id=$1 and leave_type='casual' and days=3`, [P.ravi.emp])).rows[0].id;
+const rc0 = (await bal(P.ravi)).c;
+await as(SA, `select update_special_grant($1, 1, 'Festival')`, [gr]);
+assert.equal((await bal(P.ravi)).c, rc0 - 2);
+ok('Edit grant 3 → 1 CL removes 2 days');
+
 await checkInvariants('scripted');
 ok(`invariants hold after scripted scenarios${bugs.length ? ` (${bugs.length} issues!)` : ''}`);
 
@@ -338,7 +419,7 @@ for (let day = '2026-01-14'; day <= '2027-01-20'; day = addDays(day, 1)) {
     const p = P[k];
     if (!p.emp || k === 'arjun') continue;
     if (chance(Number(process.env.APPLY_P ?? 0.09))) {
-      const type = p.category === 'permanent_wfh' ? pick(['casual', 'earned']) : pick(['casual', 'earned', 'wfh', 'wfh']);
+      const type = p.category === 'permanent_wfh' ? pick(['casual', 'earned', 'casual', 'earned', 'unpaid']) : pick(['casual', 'earned', 'wfh', 'wfh', 'unpaid']);
       let start = type === 'wfh' ? addDays(day, Math.floor(rand() * 8)) : addDays(day, Math.floor(rand() * 25) - (chance(0.1) ? 10 : 0));
       if (type === 'wfh' && start.slice(0, 7) !== day.slice(0, 7)) start = day;
       const len = chance(0.6) ? 0 : Math.floor(rand() * 4);
@@ -347,7 +428,7 @@ for (let day = '2026-01-14'; day <= '2027-01-20'; day = addDays(day, 1)) {
       const half = len === 0 && chance(0.25);
       const raise = chance(0.35);
       try {
-        const res = await apply(p, type, start, end, { half, session: half ? pick(['first', 'second']) : null, raise, reason: raise ? 'Need extra days' : '' });
+        const res = await apply(p, type, start, end, { half, session: half ? pick(['first', 'second']) : null, raise, reason: raise || (type === 'unpaid' && chance(0.9)) ? 'Need extra days' : '' });
         stats.applied++;
         if (res.status === 'approved') stats.auto++; else stats.extra++;
         if (half) stats.halfDays++;
@@ -391,6 +472,21 @@ for (let day = '2026-01-14'; day <= '2027-01-20'; day = addDays(day, 1)) {
     const k = pick(['asha', 'ravi', 'meera', 'kabir']);
     if (P[k].emp) { await as(SA, `select grant_special($1, $2, 1, 'Spot award')`, [P[k].emp, pick(['casual', 'earned'])]); stats.grants++; }
   }
+  if (chance(Number(process.env.GRANT_P ?? 0.03))) {   // HR grants a block, deducts, edits or revokes
+    const k = pick(['asha', 'ravi', 'meera', 'kabir', 'zoya']);
+    const op = pick(['grant', 'grant', 'deduct', 'revoke', 'revoke', 'edit']);
+    if (P[k].emp) try {
+      if (op === 'grant') await as(SA, `select grant_special($1, $2, $3, 'Block grant')`, [P[k].emp, pick(['casual', 'earned']), pick([2, 5, 10])]);
+      if (op === 'deduct') await as(SA, `select grant_special($1, $2, $3, 'Deduction')`, [P[k].emp, pick(['casual', 'earned']), -pick([0.5, 1, 3])]);
+      const g = (await sys(`select id, days::float d from special_grants where employee_id=$1 and revoked_at is null order by random() limit 1`, [P[k].emp])).rows[0];
+      if (g && op === 'revoke') { await as(SA, `select revoke_special_grant($1)`, [g.id]); stats.revokes = (stats.revokes ?? 0) + 1; }
+      if (g && op === 'edit') await as(SA, `select update_special_grant($1, $2, 'edited')`, [g.id, g.d > 0 ? Math.max(0.5, g.d - 1) : g.d - 0.5]);
+      stats.grantOps = (stats.grantOps ?? 0) + 1;
+    } catch (ex) {
+      if (BIZ.has(ex.code)) { const key = 'GRANT: ' + ex.message.replace(/[\d.]+/g, '#'); stats.bizErrors[key] = (stats.bizErrors[key] ?? 0) + 1; }
+      else unexpected.push({ day, action: 'grant-' + op, code: ex.code, msg: ex.message });
+    }
+  }
 
   if (day.endsWith('-01') || day.endsWith('-15') || day === '2027-01-20') await checkInvariants(day);
 }
@@ -421,62 +517,56 @@ if (ashaJul?.amount !== 1.5) bug('July allocation change not applied from next c
 // Part 3 — the owner's worked example (1 CL, 1 EL, 4 WFH; Oct 2026 → Jan 2027)
 // =====================================================================
 console.log('\nPart 3 — owner example (1/1/4 from 1 Oct 2026)');
-await persona('owner', { name: 'Owner Example', category: 'hybrid', joined: '2026-10-01', alloc: [1, 1, 4] });
+await persona('owner', { name: 'Owner Example', category: 'office', joined: '2026-10-01', alloc: [1, 1, 4] });
 const O = P.owner;
 TODAY = '2026-10-01'; await onboard(O);
 const ob = async () => { const b = await bal(O); return [b.c, b.e, b.w]; };
 assert.deepEqual(await ob(), [1, 1, 4]);
 const approveAll = async () => { for (const q of (await as(SA, `select id from leave_requests where employee_id=$1 and status='pending'`, [O.emp])).rows) await as(SA, `select decide_request($1, true, 'ok')`, [q.id]); };
 
-// October: takes 2 CL, 2 EL, 6 WFH (beyond balance → raised to HR and approved)
+// October (policy v2): wants 2 CL / 2 EL / 6 WFH with 1 / 1 / 4
 TODAY = '2026-10-05';
-await apply(O, 'casual', '2026-10-06', '2026-10-07', { raise: true, reason: 'Family' });
-await apply(O, 'earned', '2026-10-08', '2026-10-09', { raise: true, reason: 'Trip' });
-await apply(O, 'wfh', '2026-10-12', '2026-10-16', { raise: true, reason: 'Home repairs' });   // 5 days (12–16)
-await apply(O, 'wfh', '2026-10-19', '2026-10-19', { raise: true, reason: 'Home repairs' });   // +1 = 6
+let e3 = await err(apply(O, 'casual', '2026-10-06', '2026-10-07', { raise: true, reason: 'Family' }));
+assert.match(e3?.message ?? '', /Only 1 day\(s\) of Casual Leave available/);
+await apply(O, 'casual', '2026-10-06', '2026-10-06');                                  // 1 CL auto
+await apply(O, 'unpaid', '2026-10-07', '2026-10-07', { reason: 'Family' });             // rest as unpaid
+await apply(O, 'earned', '2026-10-08', '2026-10-08');                                  // 1 EL auto
+await apply(O, 'unpaid', '2026-10-09', '2026-10-09', { reason: 'Trip' });
+await apply(O, 'wfh', '2026-10-12', '2026-10-15');                                     // 4 WFH auto
+e3 = await err(apply(O, 'wfh', '2026-10-16', '2026-10-19'));
+assert.match(e3?.message ?? '', /Raise a request to HR/);
+await apply(O, 'wfh', '2026-10-16', '2026-10-19', { raise: true, reason: 'Home repairs' }); // 2 extra WFH
 await approveAll();
-assert.deepEqual(await ob(), [-1, -1, -2]);
-ok('Oct: 2 CL / 2 EL / 6 WFH approved by HR → balances −1 / −1 / −2');
+assert.deepEqual(await ob(), [0, 0, -2]);
+const oov = (await as(SA, `select unpaid_month::float m from leave_overview where employee_id=$1`, [O.emp])).rows[0];
+assert.equal(oov.m, 2);
+ok('Oct: CL/EL stop at 0 (extra taken as 2 unpaid days); WFH 6 → −2 via HR');
 
 TODAY = '2026-11-01'; await sys(`select credit_monthly($1, '2026-11-01')`, [O.emp]);
-assert.deepEqual(await ob(), [0, 0, 2]);
-ok('1 Nov: CL 0, EL 0, WFH 4 − 2 = 2  (matches “Ideal”)');
+assert.deepEqual(await ob(), [1, 1, 2]);
+ok('1 Nov: CL 1, EL 1, WFH 4 − 2 = 2 (WFH shortfall taken from next month)');
 
 TODAY = '2026-11-02';
-let e3 = await err(apply(O, 'casual', '2026-11-03', '2026-11-04'));
-assert.match(e3?.message ?? '', /Raise a request to HR/);
-await apply(O, 'casual', '2026-11-03', '2026-11-04', { raise: true, reason: 'Wedding' });
-await apply(O, 'wfh', '2026-11-16', '2026-11-19', { raise: true, reason: 'Internet install' }); // 4 WFH with 2 left
+await apply(O, 'wfh', '2026-11-16', '2026-11-19', { raise: true, reason: 'Internet install' }); // 4 with 2 left → −2
 await approveAll();
-assert.deepEqual(await ob(), [-2, 0, -2]);
-ok('Nov: takes 2 CL, 4 WFH → −2 CL, −2 WFH (nothing auto-approved while it doesn’t fit)');
+assert.deepEqual(await ob(), [1, 1, -2]);
+await apply(O, 'wfh', '2026-11-02', '2026-11-06', { raise: true, reason: 'Renovation' });      // 5 more → −7
+await approveAll();
+assert.deepEqual(await ob(), [1, 1, -7]);
+e3 = await err(apply(O, 'wfh', '2026-11-20', '2026-11-25', { raise: true, reason: 'x' }));     // 4 working days → −11
+assert.match(e3?.message ?? '', /limit of -10/);
+await apply(O, 'wfh', '2026-11-20', '2026-11-23', { raise: true, reason: 'x' });               // 2 → −9
+await approveAll();
+assert.deepEqual(await ob(), [1, 1, -9]);
+ok('Nov: WFH can go down to −10 with HR approval; going past −10 blocked');
 
 TODAY = '2026-12-01'; await sys(`select credit_monthly($1, '2026-12-01')`, [O.emp]);
-assert.deepEqual(await ob(), [-1, 1, 2]);
-ok('1 Dec: CL −1, EL 1, WFH 2');
-
-TODAY = '2026-12-02';
-const w = await apply(O, 'wfh', '2026-12-03', '2026-12-04');
-assert.equal(w.status, 'approved');
-assert.deepEqual(await ob(), [-1, 1, 0]);
-ok('Dec: 2 WFH within balance → auto-approved');
-
+assert.deepEqual(await ob(), [2, 2, -5]);
+ok('1 Dec: WFH −9 + 4 = −5 (shortfall carries until repaid)');
 TODAY = '2026-12-31'; await sys(`select expire_casual($1, 2026)`, [O.emp]);
-assert.equal((await bal(O)).c, -1);
 TODAY = '2027-01-01'; await sys(`select credit_monthly($1, '2027-01-01')`, [O.emp]);
-assert.deepEqual(await ob(), [0, 2, 4]);
-ok('31 Dec: CL shortfall −1 carries over; 1 Jan → CL 0, EL 2, WFH 4');
-
-TODAY = '2027-01-04';
-await sys(`update leave_balances set earned = -9 where employee_id=$1`, [O.emp]);
-await sys(`insert into leave_transactions (employee_id, leave_type, kind, amount, balance_after, note) values ($1,'earned','adjustment', -11, -9, 'test: near floor')`, [O.emp]);
-e3 = await err(apply(O, 'earned', '2027-01-05', '2027-01-06', { raise: true, reason: 'x' }));
-assert.match(e3?.message ?? '', /limit of -10/);
-await sys(`update leave_balances set wfh = -3 where employee_id=$1`, [O.emp]);
-await sys(`insert into leave_transactions (employee_id, leave_type, kind, amount, balance_after, note) values ($1,'wfh','adjustment', -7, -3, 'test: near floor')`, [O.emp]);
-e3 = await err(apply(O, 'wfh', '2027-01-07', '2027-01-08', { raise: true, reason: 'x' }));
-assert.match(e3?.message ?? '', /limit of -4/);
-ok('floors: EL/CL cannot go below −10, WFH below −4');
+assert.deepEqual(await ob(), [1, 3, -1]);
+ok('Dec → Jan: unused CL expires (2 → 0, +1 = 1), EL carries (3), WFH −5 + 4 = −1');
 await checkInvariants('owner-example');
 
 for (const u of unexpected) bug('Unexpected (non-business) error', u);

@@ -53,13 +53,14 @@ export default async function BalancesPage({ searchParams }: { searchParams: Pro
           <EmptyState icon={Scale} title="No active employees found" />
         ) : (
           <TableScroll>
-            <Table minWidth={760}>
+            <Table minWidth={860}>
               <thead>
-                <tr><Th>Employee</Th><Th>Category</Th><Th align="right">Casual</Th><Th align="right">Earned</Th><Th align="right">WFH (month)</Th><Th align="right">Pending</Th></tr>
+                <tr><Th>Employee</Th><Th>Category</Th><Th align="right">Casual</Th><Th align="right">Earned</Th><Th align="right">WFH (month)</Th><Th align="right">Unpaid (month)</Th><Th align="right">Pending</Th></tr>
               </thead>
               <tbody>
                 {rows.map((r) => {
-                  const pending = Number(r.pending_casual) + Number(r.pending_earned) + Number(r.pending_wfh);
+                  const pending = Number(r.pending_casual) + Number(r.pending_earned) + Number(r.pending_wfh) + Number(r.pending_unpaid ?? 0);
+                  const unpaid = Number(r.unpaid_month ?? 0);
                   const atCap = Number(r.earned) >= EL_CAP;
                   return (
                     <RowLink key={r.employee_id} href={`/employees/${r.employee_id}`}>
@@ -70,6 +71,7 @@ export default async function BalancesPage({ searchParams }: { searchParams: Pro
                       <Td align="right">
                         {r.category === 'permanent_wfh' ? <span className="text-ink-400">—</span> : <Cell value={days(r.wfh)} sub={`of ${days(r.wfh_per_month)}`} />}
                       </Td>
+                      <Td align="right">{unpaid > 0 ? <Cell value={days(unpaid)} sub={`${days(r.unpaid_year)} this year`} warn /> : <span className="text-ink-400">—</span>}</Td>
                       <Td align="right">{pending > 0 ? <Badge tone="warning">{days(pending)}</Badge> : <span className="text-ink-400">—</span>}</Td>
                     </RowLink>
                   );

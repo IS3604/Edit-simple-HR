@@ -17,13 +17,14 @@ const KINDS = [
   { value: '', label: 'All types' },
   { value: 'leave', label: 'Leave' },
   { value: 'wfh', label: 'WFH' },
+  { value: 'unpaid', label: 'Unpaid' },
 ];
 
 export default async function RequestsPage({ searchParams }: { searchParams: Promise<{ status?: string; kind?: string }> }) {
   const me = await requireProfile(['superadmin', 'admin']);
   const sp = await searchParams;
   const status = STATUSES.includes(sp.status as RequestStatus) ? (sp.status as RequestStatus | 'all') : 'pending';
-  const kind = sp.kind === 'leave' || sp.kind === 'wfh' ? sp.kind : '';
+  const kind = sp.kind === 'leave' || sp.kind === 'wfh' || sp.kind === 'unpaid' ? sp.kind : '';
   const isSuper = me.role === 'superadmin';
   const today = todayIST();
 
@@ -31,6 +32,7 @@ export default async function RequestsPage({ searchParams }: { searchParams: Pro
   let query = supabase.from('leave_requests').select(REQUEST_COLUMNS);
   if (status !== 'all') query = query.eq('status', status);
   if (kind === 'wfh') query = query.eq('leave_type', 'wfh');
+  if (kind === 'unpaid') query = query.eq('leave_type', 'unpaid');
   if (kind === 'leave') query = query.in('leave_type', ['casual', 'earned']);
   query = status === 'pending'
     ? query.order('start_date', { ascending: true })

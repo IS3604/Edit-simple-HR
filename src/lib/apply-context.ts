@@ -28,6 +28,7 @@ export function buildApplyContext(overview: LeaveOverview | null, basics: ApplyB
         { value: 'casual' as const, label: 'Casual Leave', available: Number(overview.casual) },
         { value: 'earned' as const, label: 'Earned Leave', available: Number(overview.earned) },
         ...(overview.category === 'permanent_wfh' ? [] : [{ value: 'wfh' as const, label: 'WFH', available: Number(overview.wfh) }]),
+        { value: 'unpaid' as const, label: 'Unpaid Leave', available: 0 },
       ]
     : [];
   return { options, ...basics };

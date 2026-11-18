@@ -42,7 +42,7 @@ await db.exec(`
    ('${E2}', 'e2@editsimple.com',   '{}', '{}');
   insert into public.employees (profile_id, employee_code, full_name, email, joining_date, category) values
    ('${E1}', 'ES-001', 'Emp One', 'e1@editsimple.com', '2025-01-01', 'office'),
-   ('${E2}', 'ES-002', 'Emp Two', 'e2@editsimple.com', '2025-01-01', 'hybrid');
+   ('${E2}', 'ES-002', 'Emp Two', 'e2@editsimple.com', '2025-01-01', 'office');
 `);
 
 async function as(uid, sql, params) {
@@ -154,7 +154,7 @@ assert.equal((await db.query(`select full_name from profiles where id='${E1}'`))
 ok('employee name change syncs to profile');
 
 // ===== Phase 3: balance engine =====
-await db.exec(`insert into employees (employee_code, full_name, email, joining_date, category) values ('ES-004','Four','e4@editsimple.com','2025-10-01','hybrid')`);
+await db.exec(`insert into employees (employee_code, full_name, email, joining_date, category) values ('ES-004','Four','e4@editsimple.com','2025-10-01','office')`);
 const e4 = (await db.query(`select id from employees where employee_code='ES-004'`)).rows[0].id;
 await db.exec(`update leave_allocations set casual_per_month=1, earned_per_month=8, wfh_per_month=3, configured_at=now() where employee_id='${e4}'`);
 const bal = async () => { const r = (await db.query(`select casual, earned, wfh, casual_year, wfh_month from leave_balances where employee_id='${e4}'`)).rows[0];
@@ -227,7 +227,7 @@ const apply = (who, args) => as(who, `select apply_leave(${args}) j`).then((r) =
 const bal1 = async () => { const r = (await db.query(`select casual, wfh from leave_balances where employee_id='${e1}'`)).rows[0]; return [+r.casual, +r.wfh]; };
 
 // e1: CL 1.5, WFH 4
-assert.match(await msg(as(E1, `select apply_leave('casual', '${d1}', '${d2}', '')`)), /Raise a request/);
+assert.match(await msg(as(E1, `select apply_leave('casual', '${d1}', '${d2}', '')`)), /Unpaid leave/);
 const a1 = await apply(E1, `'casual', '${d1}', '${d1}', 'family'`);
 assert.equal(a1.status, 'approved');
 assert.deepEqual(await bal1(), [0.5, 4]);
@@ -235,19 +235,20 @@ const r1 = a1.id;
 assert.equal((await db.query(`select auto_approved from leave_requests where id='${r1}'`)).rows[0].auto_approved, true);
 ok('within balance: auto-approved and deducted immediately');
 
-assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d2}', '', false, null, true)`)), /reason/);
-const a2 = await apply(E1, `'casual', '${d2}', '${d2}', 'need one more day', false, null, true`);
+assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d2}', 'x', false, null, true)`)), /Unpaid leave/);
+assert.match(await msg(as(E1, `select apply_leave('unpaid', '${d2}', '${d2}', '')`)), /reason/);
+const a2 = await apply(E1, `'unpaid', '${d2}', '${d2}', 'need one more day'`);
 assert.equal(a2.status, 'pending');
 assert.deepEqual(await bal1(), [0.5, 4]);
-ok('beyond balance: blocked unless raised (with reason) as a pending extra-day request');
+ok('CL beyond balance blocked (no negatives); unpaid leave needs a reason and goes to HR');
 
 assert.match(await msg(as(AD, `select decide_request('${a2.id}', true, '')`)), /Only a Superadmin/);
 await as(SA, `select decide_request('${a2.id}', true, 'ok')`);
 const x = (await db.query(`select status, extra_days from leave_requests where id='${a2.id}'`)).rows[0];
-assert.deepEqual([x.status, +x.extra_days], ['approved', 0.5]);
-assert.deepEqual(await bal1(), [-0.5, 4]);
+assert.deepEqual([x.status, +x.extra_days], ['approved', 0]);
+assert.deepEqual(await bal1(), [0.5, 4]);
 assert.match(await msg(as(SA, `select decide_request('${a2.id}', true, '')`)), /already approved/);
-ok('HR approves extra request: full day deducted, balance goes to -0.5 (owed); admins cannot decide');
+ok('HR approves unpaid leave: no balance change; admins cannot decide');
 
 assert.match(await msg(as(E1, `select apply_leave('wfh', '${d1}', '${d1}', '')`)), /overlap/);
 assert.match(await msg(as(E1, `select apply_leave('casual', '${d2}', '${d1}', '')`)), /End date/);
@@ -260,22 +261,22 @@ const hDay = (await db.query(`select d::date::text d from generate_series($1::da
 if (hDay) {
   const hw = await apply(E1, `'wfh', '${hDay}', '${hDay}', '', true, 'second'`);
   assert.equal(hw.status, 'approved'); assert.equal(+hw.days, 0.5);
-  assert.deepEqual(await bal1(), [-0.5, 3.5]);
+  assert.deepEqual(await bal1(), [0.5, 3.5]);
   ok('half-day: 0.5 day, auto-approved');
 
   const c = (await as(E1, `select cancel_request('${hw.id}') j`)).rows[0].j;
-  assert.equal(+c.refunded, 0.5); assert.deepEqual(await bal1(), [-0.5, 4]);
+  assert.equal(+c.refunded, 0.5); assert.deepEqual(await bal1(), [0.5, 4]);
   assert.match(await msg(as(E1, `select cancel_request('${hw.id}')`)), /already cancelled/);
   ok('cancel approved future leave: refunded once');
 }
 
 const cx = (await as(E1, `select cancel_request('${a2.id}') j`)).rows[0].j;
-assert.equal(+cx.refunded, 1);  // full deducted day comes back
+assert.equal(+cx.refunded, 0);  // unpaid: nothing to refund
 assert.deepEqual(await bal1(), [0.5, 4]);
 assert.match(await msg(as(E2, `select cancel_request('${r1}')`)), /not found/);
-ok('cancelling an HR-approved request refunds exactly what was deducted; others cannot cancel');
+ok('cancelling approved unpaid leave refunds nothing; others cannot cancel');
 
-const p3 = await apply(E1, `'casual', '${d2}', '${d2}', 'emergency', false, null, true`);
+const p3 = await apply(E1, `'unpaid', '${d2}', '${d2}', 'emergency'`);
 await as(SA, `select decide_request('${p3.id}', false, 'no')`);
 assert.equal((await db.query(`select status from leave_requests where id='${p3.id}'`)).rows[0].status, 'rejected');
 ok('reject: status updated, balance unchanged');
@@ -324,7 +325,6 @@ assert.equal(await elOf(e6), el0 + 1);
 ok('superadmin edits a grant: balance follows the new days; reason-only edit adds no ledger line; admin cannot edit');
 
 await db.exec(`update leave_balances set earned = 0.5 where employee_id='${e6}'`); // employee has used most of it
-assert.match(await msg(as(SA, `select revoke_special_grant('${gid}')`)), /already used/);
 await db.exec(`update leave_balances set earned = 0 where employee_id='${e6}'`);
 assert.match(await msg(as(SA, `select update_special_grant('${gid}', 0.5, 'x')`)), /at most/);
 await db.exec(`update leave_balances set earned = 0.5 where employee_id='${e6}'`);
@@ -337,6 +337,6 @@ assert.ok((await db.query(`select revoked_at from special_grants where id='${gid
 assert.match(await msg(as(SA, `select revoke_special_grant('${gid}')`)), /already revoked/);
 assert.match(await msg(as(SA, `select update_special_grant('${gid}', 2, 'x')`)), /revoked/);
 assert.match(await msg(as(AD, `select revoke_special_grant('${gid}')`)), /Only a Superadmin/);
-ok('revoke: blocked if the days were already used; removes the days once; revoked grants cannot be edited');
+ok('revoke: removes the unused days once; revoked grants cannot be edited');
 
 console.log(`\nAll ${n} checks passed.`);
