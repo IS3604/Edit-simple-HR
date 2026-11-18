@@ -10,8 +10,9 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import type { Source } from '@/lib/assistant/agent';
 import { deleteAllChats, deleteChat } from './actions';
 import { ActionCard, type Proposal } from './ActionCard';
+import { DoneCard, ModeSwitch, type Done } from './AutoMode';
 
-export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number; cached?: boolean; proposals?: Proposal[] };
+export type Msg = { id: string; role: 'user' | 'assistant'; content: string; sources?: Source[]; error?: boolean; steps?: number; cached?: boolean; proposals?: Proposal[]; done?: Done[] };
 type Chat = { id: string; title: string; updated_at: string };
 
 /** Safe rendering: only in-app links; no images (they could leak data via the URL). */
@@ -88,8 +89,8 @@ function StepTicker({ step, n }: { step: string; n: number }) {
   );
 }
 
-export function AssistantChat({ chatId, chats, initialMessages, firstName, setupError }: {
-  chatId: string | null; chats: Chat[]; initialMessages: Msg[]; firstName: string; setupError: string | null;
+export function AssistantChat({ chatId, chats, initialMessages, firstName, setupError, mode = 'manual' }: {
+  chatId: string | null; chats: Chat[]; initialMessages: Msg[]; firstName: string; setupError: string | null; mode?: 'manual' | 'smart' | 'auto';
 }) {
   const router = useRouter();
   const [messages, setMessages] = useState<Msg[]>(() => pick(chatId, initialMessages));
@@ -147,6 +148,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
     const ctrl = new AbortController(); abortRef.current = ctrl;
     let steps = 0;
     const proposals: Proposal[] = [];
+    const autoDone: Done[] = [];
     const fail = (message: string) => setMessages((m) => [...m, { id: `e${Date.now()}`, role: 'assistant', content: message, error: true }]);
     try {
       const res = await fetch('/api/assistant', {
@@ -177,9 +179,10 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
           else if (ev.type === 'delta') setDraft((d) => d + ev.text);
           else if (ev.type === 'reset') setDraft('');
           else if (ev.type === 'action') proposals.push(ev.proposal);
+          else if (ev.type === 'action_done') autoDone.push({ proposal: ev.proposal, result: ev.result });
           else if (ev.type === 'error') fail(ev.message);
           else if (ev.type === 'done') {
-            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources, cached: ev.cached, proposals: proposals.length ? proposals : undefined }];
+            const next: Msg[] = [...msgRef.current, { id: `a${Date.now()}`, role: 'assistant', content: ev.text, sources: ev.sources, cached: ev.cached, proposals: proposals.length ? proposals : undefined, done: autoDone.length ? autoDone : undefined }];
             msgRef.current = next; setMessages(next);
             memory.set(ev.chatId, next);
             if (ev.saveError) fail(`Answer shown, but it couldn’t be saved to this chat: ${ev.saveError}`);
@@ -250,10 +253,11 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
             <Avatar />
             <div>
               <h1 className="text-[15px] font-semibold text-ink">Ask HR AI</h1>
-              <p className="text-2xs text-ink-500">Answers from live HR data · asks before changing anything · Superadmin only</p>
+              <p className="text-2xs text-ink-500">Answers from live HR data · Superadmin only</p>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
+            <ModeSwitch initial={mode} />
             {currentId && (
               <button type="button" onClick={() => setConfirm({ id: currentId, title: chats.find((c) => c.id === currentId)?.title ?? 'this chat' })}
                 className="inline-flex h-8 items-center gap-1.5 rounded-md border border-line bg-white px-2.5 text-xs font-medium text-ink-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600">
@@ -310,6 +314,7 @@ export function AssistantChat({ chatId, chats, initialMessages, firstName, setup
                     <div className="assistant-md text-[14px] leading-relaxed text-ink">
                       <ReactMarkdown {...mdProps}>{m.content}</ReactMarkdown>
                     </div>
+                    {m.done?.map((d, i) => <DoneCard key={`d${i}`} done={d} />)}
                     {m.proposals?.map((p, i) => <ActionCard key={i} proposal={p} />)}
                     {m.sources && <SourceChips sources={m.sources} steps={m.steps} />}
                     {m.cached && (

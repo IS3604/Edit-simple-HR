@@ -2,6 +2,8 @@ import { getCurrentProfile } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { runAssistant, type AgentEvent, type ChatTurn, type Source } from '@/lib/assistant/agent';
 import { cacheKey, dataVersion, readCache, writeCache } from '@/lib/assistant/cache';
+import { executeProposal } from '@/app/(app)/assistant/execute';
+import type { AiMode } from '@/lib/assistant/risk';
 
 export const maxDuration = 60;
 export const preferredRegion = 'bom1';
@@ -51,7 +53,11 @@ export async function POST(req: Request) {
           send({ type: 'step', text: 'Found this answer earlier — data unchanged' });
           answer = { text: hit.answer, sources: hit.sources };
         } else {
-          answer = await runAssistant(db, me.full_name || me.email, history, text, send);
+          const { data: st } = await db.from('app_settings').select('ai_mode').eq('id', 1).maybeSingle();
+          const mode = ((st as { ai_mode?: AiMode } | null)?.ai_mode ?? 'manual') as AiMode;
+          answer = await runAssistant(db, me.full_name || me.email, history, text, send, {
+            mode, execute: (p) => executeProposal(p.kind, p.fields),
+          });
           // Only cache answers that actually looked at data or are policy/off-topic replies — never errors.
           // Never cache proposals (the confirmation card must come from a fresh run).
           const proposed = answer.sources.some((src) => src.tool.startsWith('propose_'));

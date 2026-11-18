@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { runAssistant, stepLabel, type AgentEvent } from '../src/lib/assistant/agent';
 import { runTool, TOOLS } from '../src/lib/assistant/tools';
 import { cacheKey, normalizeQuestion } from '../src/lib/assistant/cache';
+import { isRisky, shouldAutoRun } from '../src/lib/assistant/risk';
 const tool = async (db: never, name: string, args: Record<string, unknown>) => { const w = JSON.parse(await runTool(db, name, args)); return w.data ? JSON.parse(w.data) : w; };
 
 // ---- tiny chainable Supabase stub: records filters, returns canned rows per table/rpc ----
@@ -287,6 +288,50 @@ let n = 0; const ok = (m: string) => console.log(`  ✓ ${++n}. ${m}`);
   assert.equal(names.length, 9);
   for (const t of TOOLS.filter((x) => x.name.startsWith('propose_'))) assert.ok(!JSON.stringify(t.parameters).includes('password'));
   ok('9 proposal tools; none takes a password');
+}
+
+// 10. Change modes: manual / smart auto / full auto
+{
+  const P = (kind: string, fields: Record<string, unknown>) => ({ kind, fields }) as never;
+  const addDays = P('balance_change', { direction: 'add' }), deduct = P('balance_change', { direction: 'deduct' });
+  const approve = P('decide_request', { decision: 'approve' }), reject = P('decide_request', { decision: 'reject' });
+  assert.deepEqual([addDays, deduct, approve, reject, P('add_employee', {}), P('edit_employee', {}), P('add_holiday', {}), P('remove_holiday', {}),
+    P('set_status', { status: 'inactive' }), P('set_status', { status: 'active' }), P('set_allocation', { rows: [1] }), P('set_allocation', { rows: [1, 2] }),
+    P('edit_grant', { days: 10, new_days: 5 }), P('edit_grant', { days: 5, new_days: 10 }), P('cancel_request', {}), P('revoke_grant', {})].map(isRisky),
+    [false, true, false, true, true, false, false, true, true, false, false, true, true, false, true, true]);
+  assert.equal(shouldAutoRun('manual', addDays), false);
+  assert.equal(shouldAutoRun('smart', addDays), true); assert.equal(shouldAutoRun('smart', deduct), false);
+  assert.equal(shouldAutoRun('auto', deduct), true);
+  ok('risk rules: smart auto runs add days / approve / edits / add holiday / single allocation; asks for deductions, rejections, cancels, revokes, deactivations, removals, new employees, bulk');
+
+  const db = stub({ employees: [{ id: 'e1', full_name: 'Asha Rao', employee_code: 'ES-004', category: 'office', status: 'active' }], leave_overview: [{ earned: 6, casual: 1 }] });
+  process.env.OPENAI_API_KEY = 'sk-test';
+  const run = async (mode: 'manual' | 'smart' | 'auto', args: string) => {
+    let call = 0; let toolOut = ''; let instr = '';
+    globalThis.fetch = (async (_u: string, init: { body: string }) => {
+      call++; const body = JSON.parse(init.body); instr = body.instructions;
+      if (call === 1) return sse([{ type: 'function_call', call_id: 'x1', name: 'propose_balance_change', arguments: args }]);
+      toolOut = body.input.find((i: { type?: string }) => i.type === 'function_call_output').output;
+      return sse([{ type: 'message', content: [{ type: 'output_text', text: 'ok' }] }]);
+    }) as never;
+    const events: AgentEvent[] = []; const executed: unknown[] = [];
+    await runAssistant(db as never, 'x', [], 'q', (e) => events.push(e), {
+      mode, execute: async (p) => { executed.push(p); return { ok: true, message: 'Done: 2 days added', password: 'Secret!123' }; },
+    });
+    return { events, executed, toolOut, instr };
+  };
+  const add = '{"employee":"Asha","leave_type":"earned","direction":"add","days":2,"reason":"OT"}';
+  const ded = '{"employee":"Asha","leave_type":"earned","direction":"deduct","days":1,"reason":"x"}';
+  let r = await run('manual', add);
+  assert.equal(r.executed.length, 0); assert.ok(r.events.some((e) => e.type === 'action')); assert.match(r.instr, /MANUAL/);
+  r = await run('smart', add);
+  assert.equal(r.executed.length, 1); assert.ok(r.events.some((e) => e.type === 'action_done'));
+  assert.match(r.toolOut, /executed/); assert.ok(!r.toolOut.includes('Secret!123'), 'password never reaches the AI');
+  r = await run('smart', ded);
+  assert.equal(r.executed.length, 0); assert.ok(r.events.some((e) => e.type === 'action'));
+  r = await run('auto', ded);
+  assert.equal(r.executed.length, 1); assert.match(r.instr, /FULL AUTO/);
+  ok('modes: manual → card; smart → add runs, deduct asks; full auto → deduct runs; AI sees the result but never the password');
 }
 
 console.log(`\nAll ${n} assistant checks passed.`);

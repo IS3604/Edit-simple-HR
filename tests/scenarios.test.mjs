@@ -420,6 +420,15 @@ assert.equal((await as(AD, `select count(*)::int c from assistant_cache`)).rows[
 assert.ok(await err(as(P.asha.uid, `insert into assistant_cache (key, answer) values ('k2', 'x')`)));
 ok('AI cache: data fingerprint changes on apply, cancel, grant, holiday edit, employee edit; Superadmin-only');
 
+// Ask HR AI change mode (0017): default manual; Superadmin can change; Admin can't; invalid refused
+assert.equal((await as(SA, `select ai_mode from app_settings`)).rows[0].ai_mode, 'manual');
+await as(SA, `update app_settings set ai_mode = 'smart' where id = 1`);
+await as(AD, `update app_settings set ai_mode = 'auto' where id = 1`).catch(() => {});
+assert.equal((await as(SA, `select ai_mode from app_settings`)).rows[0].ai_mode, 'smart');
+assert.ok(await err(as(SA, `update app_settings set ai_mode = 'yolo' where id = 1`)));
+await as(SA, `update app_settings set ai_mode = 'manual' where id = 1`);
+ok('AI change mode: defaults to manual; only Superadmin can switch; invalid values refused');
+
 await checkInvariants('scripted');
 ok(`invariants hold after scripted scenarios${bugs.length ? ` (${bugs.length} issues!)` : ''}`);
 

@@ -1,4 +1,4 @@
--- EditSimple HR — complete database setup (migrations 0001 → 0016 in one file).
+-- EditSimple HR — complete database setup (migrations 0001 → 0017 in one file).
 -- Use on a NEW Supabase project. For an existing one, run only the migrations you haven't applied.
 
 
@@ -2554,3 +2554,14 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function public.hr_data_version() from public, anon;
 grant  execute on function public.hr_data_version() to authenticated;
+
+-- >>>>>>>>>> 0017_ai_mode.sql <<<<<<<<<<
+-- =====================================================================
+-- EditSimple HR — 0017 Ask HR AI: how changes are applied
+--   manual : every change shows a confirmation card (default)
+--   smart  : low-risk changes run automatically; risky ones still ask
+--   auto   : every change runs automatically
+-- =====================================================================
+alter table public.app_settings add column if not exists ai_mode text not null default 'manual';
+alter table public.app_settings drop constraint if exists app_settings_ai_mode_chk;
+alter table public.app_settings add constraint app_settings_ai_mode_chk check (ai_mode in ('manual', 'smart', 'auto'));

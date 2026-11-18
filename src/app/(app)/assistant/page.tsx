@@ -10,7 +10,8 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
   const me = await requireProfile(['superadmin']);
   const { c } = await searchParams;
   const db = await createClient();
-  const [{ data: chats, error }, msgs] = await Promise.all([
+  const [{ data: settings }, { data: chats, error }, msgs] = await Promise.all([
+    db.from('app_settings').select('ai_mode').eq('id', 1).maybeSingle(),
     db.from('assistant_chats').select('id, title, updated_at').order('updated_at', { ascending: false }).limit(40),
     c ? db.from('assistant_messages').select('id, role, content, sources').eq('chat_id', c).order('id').limit(200) : Promise.resolve({ data: [] }),
   ]);
@@ -24,6 +25,7 @@ export default async function AssistantPage({ searchParams }: { searchParams: Pr
       initialMessages={messages}
       firstName={(me.full_name || me.email).split(/[\s@]/)[0]}
       setupError={error ? 'Chats can’t be loaded — run migration 0015 in Supabase.' : null}
+      mode={((settings as { ai_mode?: string } | null)?.ai_mode ?? 'manual') as 'manual' | 'smart' | 'auto'}
     />
   );
 }
